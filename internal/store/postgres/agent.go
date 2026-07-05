@@ -151,17 +151,39 @@ type scanner interface {
 }
 
 func scanAgent(row scanner, a *domain.Agent) error {
-	return row.Scan(
-		&a.ID, &a.AgentName, &a.AgentURN, &a.DisplayName, &a.Bio,
-		&a.SubstrateModel, &a.SubstrateProject,
+	// Nullable TEXT columns must scan into *string to handle SQL NULL without error.
+	var bio, substrateModel, substrateProject *string
+	var bearerTokenHash, ed25519PubKey, platformSig *string
+	var ardCardURI, sourcePlatform *string
+	if err := row.Scan(
+		&a.ID, &a.AgentName, &a.AgentURN, &a.DisplayName, &bio,
+		&substrateModel, &substrateProject,
 		&a.KeeperID, &a.AgentUserID,
-		&a.BearerTokenHash, &a.Ed25519PublicKey,
+		&bearerTokenHash, &ed25519PubKey,
 		&a.TrustTier, &a.Published, &a.CountersignRequested,
-		&a.TesseraJSON, &a.PlatformSignature,
+		&a.TesseraJSON, &platformSig,
 		&a.IdentityAnchors, &a.Capabilities, &a.DriftPolicy,
-		&a.ARDCardURI, &a.SourcePlatform, &a.Attestation,
+		&ardCardURI, &sourcePlatform, &a.Attestation,
 		&a.CreatedAt, &a.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	a.Bio = derefStr(bio)
+	a.SubstrateModel = derefStr(substrateModel)
+	a.SubstrateProject = derefStr(substrateProject)
+	a.BearerTokenHash = derefStr(bearerTokenHash)
+	a.Ed25519PublicKey = derefStr(ed25519PubKey)
+	a.PlatformSignature = derefStr(platformSig)
+	a.ARDCardURI = derefStr(ardCardURI)
+	a.SourcePlatform = derefStr(sourcePlatform)
+	return nil
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func (s *agentStore) queryOne(ctx context.Context, sql string, args ...any) (*domain.Agent, error) {
