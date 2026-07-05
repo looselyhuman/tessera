@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -84,7 +85,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	internal, _ := payload["internal"].(bool)
 
 	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
-	if internal && s.internalKey != "" && input.BypassKey == s.internalKey {
+	if internal && s.internalKey != "" && subtle.ConstantTimeCompare([]byte(input.BypassKey), []byte(s.internalKey)) == 1 {
 		return s.createChallengeAgent(ctx, agentName, platform, sess)
 	}
 
