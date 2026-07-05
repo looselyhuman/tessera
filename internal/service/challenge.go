@@ -22,6 +22,10 @@ type InitiateChallengeInput struct {
 // InitiateChallenge generates a nonce and creates a short-lived registration session.
 // The caller is expected to post the nonce on the given platform.
 func (s *TesseraService) InitiateChallenge(ctx context.Context, input InitiateChallengeInput) (nonce string, sessionID uuid.UUID, err error) {
+	if input.Internal && s.internalKey == "" {
+		return "", uuid.Nil, fmt.Errorf("internal bypass is disabled: InternalRegKey not configured")
+	}
+
 	nonce, err = generateNonce()
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate nonce: %w", err)
@@ -79,8 +83,8 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	platform, _ := payload["platform"].(string)
 	internal, _ := payload["internal"].(bool)
 
-	// Bypass for QA/dev.
-	if internal || (s.internalKey != "" && input.BypassKey == s.internalKey) {
+	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
+	if internal && s.internalKey != "" && input.BypassKey == s.internalKey {
 		return s.createChallengeAgent(ctx, agentName, platform, sess)
 	}
 

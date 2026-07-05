@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 )
 
 func (h *Handler) WellKnownAgent(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +18,7 @@ func (h *Handler) WellKnownAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) WellKnownKeeperPubKey(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+	name := strings.TrimSuffix(r.PathValue("name"), ".pub")
 	pub, err := h.svc.WellKnownKeeperPubKey(r.Context(), name)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())

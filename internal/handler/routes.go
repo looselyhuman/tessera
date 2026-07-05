@@ -8,7 +8,7 @@ import (
 func Register(mux *http.ServeMux, h *Handler) {
 	// .well-known endpoints (unauthenticated, public)
 	mux.HandleFunc("GET /.well-known/tessera/{agent_name}", h.WellKnownAgent)
-	mux.HandleFunc("GET /.well-known/tessera/keepers/{name}.pub", h.WellKnownKeeperPubKey)
+	mux.HandleFunc("GET /.well-known/tessera/keepers/{name}", h.WellKnownKeeperPubKey)
 	mux.HandleFunc("GET /.well-known/tessera/revocations.json", h.WellKnownRevocations)
 	mux.HandleFunc("GET /.well-known/ai-catalog.json", h.WellKnownARDCatalog)
 

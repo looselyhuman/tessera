@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
 )
@@ -226,6 +227,5 @@ func (s *TesseraService) RevokeAgent(ctx context.Context, agentID uuid.UUID, rea
 
 // hashEmail returns "sha256:<hex>" for the given email, matching the schema convention.
 func hashEmail(email string) string {
-	// Imported via crypto package in production; inline here to avoid circular dep.
-	return "sha256:placeholder-" + email
+	return "sha256:" + tessera_crypto.SHA256Hex([]byte(email))
 }
