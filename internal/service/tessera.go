@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -14,21 +15,23 @@ import (
 
 // TesseraService handles all Tessera identity operations.
 type TesseraService struct {
-	agents       store.AgentStore
-	keepers      store.KeeperStore
-	keys         store.KeyStore
-	chain        store.AttestationStore
-	claims       store.ClaimStore
-	platforms    store.PlatformRegistrationStore
-	transitions  store.SubstrateTransitionStore
-	revocations  store.RevocationStore
+	agents        store.AgentStore
+	keepers       store.KeeperStore
+	keys          store.KeyStore
+	chain         store.AttestationStore
+	claims        store.ClaimStore
+	platforms     store.PlatformRegistrationStore
+	transitions   store.SubstrateTransitionStore
+	revocations   store.RevocationStore
 	modifications store.ModificationRequestStore
-	sessions     store.RegistrationSessionStore
-	homeDomain   string
-	internalKey  string
+	sessions      store.RegistrationSessionStore
+	homeDomain    string
+	internalKey   string
+	encryptionKey []byte
 }
 
 // NewTesseraService wires up the service with its store dependencies.
+// encryptionKey must be exactly 32 bytes (AES-256).
 func NewTesseraService(
 	agents store.AgentStore,
 	keepers store.KeeperStore,
@@ -41,6 +44,7 @@ func NewTesseraService(
 	modifications store.ModificationRequestStore,
 	sessions store.RegistrationSessionStore,
 	homeDomain, internalKey string,
+	encryptionKey []byte,
 ) *TesseraService {
 	return &TesseraService{
 		agents:        agents,
@@ -55,6 +59,7 @@ func NewTesseraService(
 		sessions:      sessions,
 		homeDomain:    homeDomain,
 		internalKey:   internalKey,
+		encryptionKey: encryptionKey,
 	}
 }
 
@@ -76,10 +81,10 @@ type RegisterAgentInput struct {
 	SessionID        uuid.UUID `json:"session_id"`
 }
 
-// RegisterKeeper creates a keeper account and generates their Ed25519 keypair.
-// Returns the session ID that the keeper will use to complete agent registration.
+// RegisterKeeper creates a keeper account, generates their Ed25519 keypair (storing the
+// private key AES-256-GCM encrypted), signs the registration record, and returns the
+// session ID that the keeper will use to complete agent registration.
 func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeeperInput) (uuid.UUID, error) {
-	// Validate name availability.
 	available, err := s.keepers.CheckNameAvailability(ctx, input.KeeperName)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("check keeper name: %w", err)
@@ -88,13 +93,71 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 		return uuid.Nil, fmt.Errorf("keeper name %q is already taken", input.KeeperName)
 	}
 
-	// Create a registration session (30 min TTL). Key generation and keeper record
-	// creation happen after email verification (not shown here — that's a separate flow).
-	payload, err := json.Marshal(map[string]any{
+	// Generate Ed25519 keypair.
+	pubB64, privB64, err := tessera_crypto.GenerateKeypair()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("generate keypair: %w", err)
+	}
+
+	// AES-256-GCM encrypt the private key before storage.
+	encryptedPrivRaw, err := tessera_crypto.Encrypt([]byte(privB64), s.encryptionKey)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("encrypt private key: %w", err)
+	}
+	encryptedPrivB64 := base64.StdEncoding.EncodeToString(encryptedPrivRaw)
+
+	// Create the keeper record (assigned ID used as the key name in key store).
+	now := time.Now()
+	keeperID := uuid.New()
+	keeper := &domain.Keeper{
+		ID:              keeperID,
+		KeeperName:      input.KeeperName,
+		DisplayName:     input.DisplayName,
+		EmailHash:       hashEmail(input.Email),
+		PublicKey:       pubB64,
+		KeeperStatement: input.KeeperStatement,
+		CreatedAt:       now,
+	}
+	if err := s.keepers.Create(ctx, keeper); err != nil {
+		return uuid.Nil, fmt.Errorf("create keeper: %w", err)
+	}
+
+	// Persist the encrypted keypair.
+	key := &domain.Key{
+		KeyType:             domain.KeyTypeKeeper,
+		KeyName:             keeperID.String(),
+		PublicKey:           pubB64,
+		EncryptedPrivateKey: encryptedPrivB64,
+		CreatedAt:           now,
+	}
+	if err := s.keys.Create(ctx, key); err != nil {
+		return uuid.Nil, fmt.Errorf("store keeper key: %w", err)
+	}
+
+	// Sign a canonical representation of the keeper registration record.
+	regRecord := map[string]any{
+		"keeper_id":        keeperID.String(),
 		"keeper_name":      input.KeeperName,
 		"display_name":     input.DisplayName,
-		"email":            hashEmail(input.Email),
+		"email_hash":       keeper.EmailHash,
 		"keeper_statement": input.KeeperStatement,
+		"created_at":       now.UTC().Format(time.RFC3339),
+	}
+	canonical, err := tessera_crypto.Canonicalize(regRecord)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("canonicalize keeper record: %w", err)
+	}
+	signature, err := tessera_crypto.Sign(privB64, canonical)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("sign keeper record: %w", err)
+	}
+
+	// Create a registration session with the keeper ID and signature so the keeper
+	// can complete agent registration in a subsequent call.
+	payload, err := json.Marshal(map[string]any{
+		"keeper_id": keeperID.String(),
+		"signature": signature,
+		"signed_at": now.UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("marshal session payload: %w", err)
@@ -104,8 +167,8 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 		ID:          uuid.New(),
 		SessionType: domain.SessionKeeper,
 		Payload:     payload,
-		ExpiresAt:   time.Now().Add(30 * time.Minute),
-		CreatedAt:   time.Now(),
+		ExpiresAt:   now.Add(30 * time.Minute),
+		CreatedAt:   now,
 	}
 	if err := s.sessions.Create(ctx, sess); err != nil {
 		return uuid.Nil, fmt.Errorf("create registration session: %w", err)
@@ -113,7 +176,8 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 	return sess.ID, nil
 }
 
-// RegisterAgent creates an agent record under a verified keeper session.
+// RegisterAgent creates an agent record under a verified keeper, signing the agent
+// registration record with the keeper's Ed25519 private key.
 func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, input RegisterAgentInput) (*domain.Agent, error) {
 	available, hasKeeper, err := s.agents.CheckNameAvailability(ctx, input.AgentName)
 	if err != nil {
@@ -121,6 +185,20 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 	}
 	if !available && hasKeeper {
 		return nil, fmt.Errorf("agent name %q is already claimed", input.AgentName)
+	}
+
+	// Retrieve and decrypt the keeper's private key for signing.
+	keeperKey, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypeKeeper, keeperID.String())
+	if err != nil {
+		return nil, fmt.Errorf("get keeper key: %w", err)
+	}
+	encryptedPrivRaw, err := base64.StdEncoding.DecodeString(keeperKey.EncryptedPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("decode encrypted private key: %w", err)
+	}
+	privBytes, err := tessera_crypto.Decrypt(encryptedPrivRaw, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt keeper private key: %w", err)
 	}
 
 	now := time.Now()
@@ -143,12 +221,34 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
-	// Append the initial chain entry.
+	// Sign a canonical representation of the agent registration record.
+	regRecord := map[string]any{
+		"agent_id":          agent.ID.String(),
+		"agent_name":        input.AgentName,
+		"agent_urn":         agent.AgentURN,
+		"display_name":      input.DisplayName,
+		"substrate_model":   input.SubstrateModel,
+		"substrate_project": input.SubstrateProject,
+		"keeper_id":         keeperID.String(),
+		"trust_tier":        string(domain.TrustSelfAttested),
+		"created_at":        now.UTC().Format(time.RFC3339),
+	}
+	canonical, err := tessera_crypto.Canonicalize(regRecord)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalize agent record: %w", err)
+	}
+	signature, err := tessera_crypto.Sign(string(privBytes), canonical)
+	if err != nil {
+		return nil, fmt.Errorf("sign agent record: %w", err)
+	}
+
+	// Append the initial chain entry with the keeper's signature.
 	entry := &domain.AttestationEntry{
 		AgentID:   agent.ID,
 		EntryType: domain.EntryCreated,
 		Attester:  "keeper:" + keeperID.String(),
 		Payload:   json.RawMessage(`{"via":"keeper_registration"}`),
+		Signature: signature,
 		CreatedAt: now,
 	}
 	if err := s.chain.Append(ctx, entry); err != nil {

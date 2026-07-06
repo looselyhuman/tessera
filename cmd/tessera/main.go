@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"log"
 	"net/http"
 	"os"
@@ -29,6 +30,15 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Decode TESSERA_KEY_SECRET (must be base64-encoded 32-byte AES-256 key).
+	encryptionKey, err := base64.StdEncoding.DecodeString(cfg.KeySecret)
+	if err != nil {
+		log.Fatalf("decode TESSERA_KEY_SECRET (must be base64): %v", err)
+	}
+	if len(encryptionKey) != 32 {
+		log.Fatalf("TESSERA_KEY_SECRET must decode to exactly 32 bytes (got %d)", len(encryptionKey))
+	}
+
 	// Wire up stores.
 	agents := postgres.NewAgentStore(pool)
 	keepers := postgres.NewKeeperStore(pool)
@@ -45,7 +55,7 @@ func main() {
 	svc := service.NewTesseraService(
 		agents, keepers, keys, chain, claims,
 		platforms, transitions, revocations, modifications, sessions,
-		cfg.HomeDomain, cfg.InternalRegKey,
+		cfg.HomeDomain, cfg.InternalRegKey, encryptionKey,
 	)
 
 	// Wire up HTTP handlers.
