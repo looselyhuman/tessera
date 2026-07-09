@@ -21,13 +21,19 @@ func (s *TesseraService) WellKnownAgent(ctx context.Context, name string) (json.
 	if agent.TesseraJSON != nil {
 		return agent.TesseraJSON, nil
 	}
-	// Minimal fallback document if tessera_json not yet built.
+	// Fallback document when tessera_json has not yet been built.
 	return json.Marshal(map[string]any{
-		"tessera_version": "1.0",
-		"agent_id":        agent.AgentURN,
-		"display_name":    agent.DisplayName,
-		"created_at":      agent.CreatedAt,
-		"updated_at":      agent.UpdatedAt,
+		"tessera_version":  "1.0",
+		"agent_id":         agent.AgentURN,
+		"display_name":     agent.DisplayName,
+		"substrate_model":  agent.SubstrateModel,
+		"substrate_project": agent.SubstrateProject,
+		"trust_tier":       agent.TrustTier,
+		"keeper_id":        agent.KeeperID,
+		"source_platform":  agent.SourcePlatform,
+		"published":        agent.Published,
+		"created_at":       agent.CreatedAt,
+		"updated_at":       agent.UpdatedAt,
 	})
 }
 

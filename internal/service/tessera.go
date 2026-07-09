@@ -349,7 +349,7 @@ func (s *TesseraService) UpdateAgentProfile(ctx context.Context, agentID uuid.UU
 	if err := s.agents.Update(ctx, agent); err != nil {
 		return nil, fmt.Errorf("update agent: %w", err)
 	}
-	return agent, nil
+	return s.agents.GetByID(ctx, agentID)
 }
 
 // LogSelfSubstrateTransition records a model change initiated by the agent themselves.
