@@ -84,6 +84,11 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	platform, _ := payload["platform"].(string)
 	internal, _ := payload["internal"].(bool)
 
+	// C2: consume the session before any verification to close the replay race window.
+	if err := s.sessions.Delete(ctx, sess.ID); err != nil {
+		return nil, fmt.Errorf("consume session: %w", err)
+	}
+
 	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
 	if internal && s.internalKey != "" && subtle.ConstantTimeCompare([]byte(input.BypassKey), []byte(s.internalKey)) == 1 {
 		return s.createChallengeAgent(ctx, agentName, platform, sess)
@@ -145,7 +150,6 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 		return nil, fmt.Errorf("append chain: %w", err)
 	}
 
-	_ = s.sessions.Delete(ctx, sess.ID)
 	return agent, nil
 }
 

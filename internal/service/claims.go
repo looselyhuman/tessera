@@ -20,6 +20,15 @@ func (s *TesseraService) InitiateClaim(ctx context.Context, keeperID uuid.UUID, 
 		return nil, fmt.Errorf("agent %q already has a keeper", agentName)
 	}
 
+	// C1: reject if a pending claim already exists for this agent
+	pending, err := s.claims.GetPendingForAgent(ctx, agent.ID)
+	if err != nil {
+		return nil, fmt.Errorf("check pending claims: %w", err)
+	}
+	if len(pending) > 0 {
+		return nil, fmt.Errorf("agent already has a pending claim")
+	}
+
 	now := time.Now()
 	claim := &domain.ClaimRequest{
 		ID:              uuid.New(),
@@ -64,34 +73,24 @@ func (s *TesseraService) ResolveClaim(ctx context.Context, claimID uuid.UUID, ag
 		return nil, fmt.Errorf("claim is already resolved")
 	}
 
-	if err := s.claims.Resolve(ctx, claimID, status); err != nil {
-		return nil, fmt.Errorf("resolve claim: %w", err)
-	}
-
 	now := time.Now()
+	var entry *domain.AttestationEntry
 	if status == domain.ClaimAccepted {
-		agent, err := s.agents.GetByID(ctx, agentID)
-		if err != nil {
-			return nil, fmt.Errorf("get agent: %w", err)
-		}
-		agent.KeeperID = &claim.KeeperID
-		agent.UpdatedAt = now
-		if err := s.agents.Update(ctx, agent); err != nil {
-			return nil, fmt.Errorf("update agent keeper: %w", err)
-		}
-
 		payload, _ := json.Marshal(map[string]string{
 			"claim_id":  claimID.String(),
 			"keeper_id": claim.KeeperID.String(),
 		})
-		entry := &domain.AttestationEntry{
+		entry = &domain.AttestationEntry{
 			AgentID:   agentID,
 			EntryType: domain.EntryKeeperClaimAccepted,
 			Attester:  "agent:" + agentID.String(),
 			Payload:   payload,
 			CreatedAt: now,
 		}
-		_ = s.chain.Append(ctx, entry)
+	}
+
+	if err := s.claims.ResolveClaimTx(ctx, claimID, agentID, claim.KeeperID, status, entry); err != nil {
+		return nil, fmt.Errorf("resolve claim: %w", err)
 	}
 
 	claim.Status = status

@@ -47,6 +47,45 @@ func (s *claimStore) Resolve(ctx context.Context, id uuid.UUID, status domain.Cl
 	return err
 }
 
+func (s *claimStore) ResolveClaimTx(ctx context.Context, claimID uuid.UUID, agentID uuid.UUID, keeperID uuid.UUID, status domain.ClaimStatus, entry *domain.AttestationEntry) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+	if _, err := tx.Exec(ctx,
+		`UPDATE tessera.claim_requests SET status=$2, resolved_at=$3 WHERE id=$1`,
+		claimID, status, now,
+	); err != nil {
+		return err
+	}
+
+	if status == domain.ClaimAccepted {
+		if _, err := tx.Exec(ctx,
+			`UPDATE tessera.agents SET keeper_id=$2, updated_at=$3 WHERE id=$1`,
+			agentID, keeperID, now,
+		); err != nil {
+			return err
+		}
+
+		if entry != nil {
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO tessera.attestation_chain
+					(agent_id, entry_type, attester, payload, signature, expires_at, created_at)
+				VALUES ($1,$2,$3,$4,$5,$6,$7)
+				RETURNING id`,
+				entry.AgentID, entry.EntryType, entry.Attester, entry.Payload, entry.Signature, entry.ExpiresAt, entry.CreatedAt,
+			).Scan(&entry.ID); err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (s *claimStore) query(ctx context.Context, sql string, args ...any) (*domain.ClaimRequest, error) {
 	var c domain.ClaimRequest
 	err := s.pool.QueryRow(ctx, sql, args...).Scan(

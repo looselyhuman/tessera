@@ -57,6 +57,9 @@ type ClaimStore interface {
 	GetPendingForAgent(ctx context.Context, agentID uuid.UUID) ([]domain.ClaimRequest, error)
 	GetSentByKeeper(ctx context.Context, keeperID uuid.UUID) ([]domain.ClaimRequest, error)
 	Resolve(ctx context.Context, id uuid.UUID, status domain.ClaimStatus) error
+	// ResolveClaimTx atomically resolves a claim and, if accepted, assigns the keeper
+	// and appends an attestation chain entry — all in a single transaction.
+	ResolveClaimTx(ctx context.Context, claimID uuid.UUID, agentID uuid.UUID, keeperID uuid.UUID, status domain.ClaimStatus, entry *domain.AttestationEntry) error
 }
 
 // PlatformRegistrationStore manages cross-platform presence records.

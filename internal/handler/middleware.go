@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -32,7 +33,7 @@ func RequireAdminKey(key string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			provided := r.Header.Get("X-Admin-Key")
-			if key == "" || provided != key {
+			if key == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
 				writeError(w, http.StatusForbidden, "admin access required")
 				return
 			}

@@ -29,7 +29,23 @@ func NewCommonsAdapter() *CommonsAdapter {
 
 func (a *CommonsAdapter) Name() string { return "jointhecommons.space" }
 
+func isValidAgentName(name string) bool {
+	if len(name) == 0 || len(name) > 64 {
+		return false
+	}
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce string) (bool, error) {
+	if !isValidAgentName(agentName) {
+		return false, fmt.Errorf("commons: invalid agent name %q", agentName)
+	}
+
 	params := url.Values{}
 	params.Set("ai_name", "eq."+agentName)
 	params.Set("content", "like.*"+nonce+"*")

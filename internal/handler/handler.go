@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 
@@ -22,7 +23,11 @@ func New(svc *service.TesseraService, adminKey string) *Handler {
 
 // isAdminAuthorized checks the X-Admin-Key header against the configured admin key.
 func (h *Handler) isAdminAuthorized(r *http.Request) bool {
-	return h.adminKey != "" && r.Header.Get("X-Admin-Key") == h.adminKey
+	if h.adminKey == "" {
+		return false
+	}
+	provided := r.Header.Get("X-Admin-Key")
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(h.adminKey)) == 1
 }
 
 // stub writes a 501 Not Implemented JSON response for unimplemented endpoints.

@@ -57,6 +57,9 @@ func (a *DiscordAdapter) VerifyNonce(ctx context.Context, agentName, nonce strin
 		return false, fmt.Errorf("discord: decode response: %w", err)
 	}
 
+	// TODO: Match by Discord user ID when available — username matching is imprecise
+	// because usernames can change and may collide. The original Python implementation
+	// had the same limitation; this should be upgraded to user ID matching.
 	for _, m := range messages {
 		if !strings.EqualFold(m.Author.Username, agentName) {
 			continue

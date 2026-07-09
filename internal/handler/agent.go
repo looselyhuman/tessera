@@ -120,6 +120,7 @@ func (h *Handler) CounterSign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
+		// TODO: Verify this signature against the keeper's public key before storing.
 		Signature string `json:"signature"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
@@ -184,7 +185,15 @@ func (h *Handler) VerifyExternal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, agent)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agent_name":      agent.AgentName,
+		"agent_urn":       agent.AgentURN,
+		"display_name":    agent.DisplayName,
+		"trust_tier":      agent.TrustTier,
+		"published":       agent.Published,
+		"keeper_id":       agent.KeeperID,
+		"source_platform": agent.SourcePlatform,
+	})
 }
 
 func (h *Handler) GeneratePlatformKey(w http.ResponseWriter, r *http.Request) {

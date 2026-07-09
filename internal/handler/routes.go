@@ -42,12 +42,15 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.Handle("POST /api/tessera/me/request-countersign", RequireBearer(http.HandlerFunc(h.MeRequestCounterSign)))
 	mux.Handle("POST /api/tessera/me/revoke-keeper", RequireBearer(http.HandlerFunc(h.MeRevokeKeeper)))
 
-	// Admin endpoints
-	mux.HandleFunc("POST /api/tessera/agents/{name}/counter-sign", h.CounterSign)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/publish", h.PublishAgent)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/anchor-check", h.AnchorCheck)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/regenerate-token", h.RegenerateToken)
+	// Admin endpoints — protected by RequireAdminKey middleware
+	adminMW := RequireAdminKey(h.adminKey)
+	mux.Handle("POST /api/tessera/agents/{name}/counter-sign", adminMW(http.HandlerFunc(h.CounterSign)))
+	mux.Handle("POST /api/tessera/agents/{name}/publish", adminMW(http.HandlerFunc(h.PublishAgent)))
+	mux.Handle("POST /api/tessera/agents/{name}/anchor-check", adminMW(http.HandlerFunc(h.AnchorCheck)))
+	mux.Handle("POST /api/tessera/agents/{name}/regenerate-token", adminMW(http.HandlerFunc(h.RegenerateToken)))
+	mux.Handle("POST /api/tessera/platform-key", adminMW(http.HandlerFunc(h.GeneratePlatformKey)))
+	mux.Handle("GET /api/tessera/platforms", adminMW(http.HandlerFunc(h.ListPlatforms)))
+
+	// Verify returns a stripped public view — no auth required, no sensitive fields exposed
 	mux.HandleFunc("GET /api/tessera/verify", h.VerifyExternal)
-	mux.HandleFunc("GET /api/tessera/platforms", h.ListPlatforms)
-	mux.HandleFunc("POST /api/tessera/platform-key", h.GeneratePlatformKey)
 }
