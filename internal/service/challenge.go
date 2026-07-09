@@ -89,9 +89,20 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 		return s.createChallengeAgent(ctx, agentName, platform, sess)
 	}
 
-	// TODO: implement platform-specific verification (HTTP call to platform API).
-	// For now, return not-implemented.
-	return nil, fmt.Errorf("platform verification for %q not yet implemented", platform)
+	nonce, _ := payload["nonce"].(string)
+
+	adapter, ok := s.platformAdapters[platform]
+	if !ok {
+		return nil, fmt.Errorf("unsupported platform %q", platform)
+	}
+	found, err := adapter.VerifyNonce(ctx, agentName, nonce)
+	if err != nil {
+		return nil, fmt.Errorf("platform verification: %w", err)
+	}
+	if !found {
+		return nil, fmt.Errorf("nonce not found on %s — post the nonce and try again", platform)
+	}
+	return s.createChallengeAgent(ctx, agentName, platform, sess)
 }
 
 func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform string, sess *domain.RegistrationSession) (*domain.Agent, error) {

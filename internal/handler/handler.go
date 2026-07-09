@@ -9,12 +9,20 @@ import (
 
 // Handler holds the service dependencies for HTTP handlers.
 type Handler struct {
-	svc *service.TesseraService
+	svc      *service.TesseraService
+	adminKey string
 }
 
 // New creates a Handler wired to the given service.
-func New(svc *service.TesseraService) *Handler {
-	return &Handler{svc: svc}
+// adminKey is the value expected in the X-Admin-Key header for admin endpoints;
+// an empty string disables all admin endpoints.
+func New(svc *service.TesseraService, adminKey string) *Handler {
+	return &Handler{svc: svc, adminKey: adminKey}
+}
+
+// isAdminAuthorized checks the X-Admin-Key header against the configured admin key.
+func (h *Handler) isAdminAuthorized(r *http.Request) bool {
+	return h.adminKey != "" && r.Header.Get("X-Admin-Key") == h.adminKey
 }
 
 // stub writes a 501 Not Implemented JSON response for unimplemented endpoints.

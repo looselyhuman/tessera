@@ -4,19 +4,62 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/looselyhuman/tessera/internal/service"
 )
 
 func (h *Handler) RegisterKeeper(w http.ResponseWriter, r *http.Request) {
-	stub("POST /api/tessera/register/keeper")(w, r)
+	var input service.RegisterKeeperInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if input.KeeperName == "" {
+		writeError(w, http.StatusBadRequest, "keeper_name is required")
+		return
+	}
+	sessionID, err := h.svc.RegisterKeeper(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"session_id": sessionID})
 }
 
 func (h *Handler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
-	stub("POST /api/tessera/register/agent")(w, r)
+	var input service.RegisterAgentInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if input.SessionID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "session_id is required")
+		return
+	}
+	if input.AgentName == "" {
+		writeError(w, http.StatusBadRequest, "agent_name is required")
+		return
+	}
+	agent, err := h.svc.RegisterAgentFromSession(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, agent)
 }
 
 func (h *Handler) CheckKeeperName(w http.ResponseWriter, r *http.Request) {
-	stub("GET /api/tessera/check/keeper")(w, r)
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name query parameter required")
+		return
+	}
+	state, err := h.svc.CheckKeeperName(r.Context(), name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"name": name, "state": state})
 }
 
 func (h *Handler) CheckAgentName(w http.ResponseWriter, r *http.Request) {

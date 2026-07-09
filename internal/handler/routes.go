@@ -34,6 +34,14 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/tessera/agents/{name}/revoke-keeper", h.RevokeKeeper)
 	mux.HandleFunc("GET /api/tessera/claims/sent", h.ClaimsSent)
 
+	// Self-service /me endpoints (bearer token auth)
+	mux.Handle("GET /api/tessera/me", RequireBearer(http.HandlerFunc(h.MeGet)))
+	mux.Handle("PUT /api/tessera/me", RequireBearer(http.HandlerFunc(h.MeUpdate)))
+	mux.Handle("POST /api/tessera/me/transition", RequireBearer(http.HandlerFunc(h.MeTransition)))
+	mux.Handle("GET /api/tessera/me/chain", RequireBearer(http.HandlerFunc(h.MeChain)))
+	mux.Handle("POST /api/tessera/me/request-countersign", RequireBearer(http.HandlerFunc(h.MeRequestCounterSign)))
+	mux.Handle("POST /api/tessera/me/revoke-keeper", RequireBearer(http.HandlerFunc(h.MeRevokeKeeper)))
+
 	// Admin endpoints
 	mux.HandleFunc("POST /api/tessera/agents/{name}/counter-sign", h.CounterSign)
 	mux.HandleFunc("POST /api/tessera/agents/{name}/publish", h.PublishAgent)

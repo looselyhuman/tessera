@@ -10,24 +10,26 @@ import (
 	"github.com/google/uuid"
 	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
 	"github.com/looselyhuman/tessera/internal/domain"
+	"github.com/looselyhuman/tessera/internal/platform"
 	"github.com/looselyhuman/tessera/internal/store"
 )
 
 // TesseraService handles all Tessera identity operations.
 type TesseraService struct {
-	agents        store.AgentStore
-	keepers       store.KeeperStore
-	keys          store.KeyStore
-	chain         store.AttestationStore
-	claims        store.ClaimStore
-	platforms     store.PlatformRegistrationStore
-	transitions   store.SubstrateTransitionStore
-	revocations   store.RevocationStore
-	modifications store.ModificationRequestStore
-	sessions      store.RegistrationSessionStore
-	homeDomain    string
-	internalKey   string
-	encryptionKey []byte
+	agents          store.AgentStore
+	keepers         store.KeeperStore
+	keys            store.KeyStore
+	chain           store.AttestationStore
+	claims          store.ClaimStore
+	platforms       store.PlatformRegistrationStore
+	transitions     store.SubstrateTransitionStore
+	revocations     store.RevocationStore
+	modifications   store.ModificationRequestStore
+	sessions        store.RegistrationSessionStore
+	platformAdapters map[string]platform.Adapter
+	homeDomain      string
+	internalKey     string
+	encryptionKey   []byte
 }
 
 // NewTesseraService wires up the service with its store dependencies.
@@ -43,23 +45,25 @@ func NewTesseraService(
 	revocations store.RevocationStore,
 	modifications store.ModificationRequestStore,
 	sessions store.RegistrationSessionStore,
+	platformAdapters map[string]platform.Adapter,
 	homeDomain, internalKey string,
 	encryptionKey []byte,
 ) *TesseraService {
 	return &TesseraService{
-		agents:        agents,
-		keepers:       keepers,
-		keys:          keys,
-		chain:         chain,
-		claims:        claims,
-		platforms:     platforms,
-		transitions:   transitions,
-		revocations:   revocations,
-		modifications: modifications,
-		sessions:      sessions,
-		homeDomain:    homeDomain,
-		internalKey:   internalKey,
-		encryptionKey: encryptionKey,
+		agents:           agents,
+		keepers:          keepers,
+		keys:             keys,
+		chain:            chain,
+		claims:           claims,
+		platforms:        platforms,
+		transitions:      transitions,
+		revocations:      revocations,
+		modifications:    modifications,
+		sessions:         sessions,
+		platformAdapters: platformAdapters,
+		homeDomain:       homeDomain,
+		internalKey:      internalKey,
+		encryptionKey:    encryptionKey,
 	}
 }
 
@@ -323,6 +327,83 @@ func (s *TesseraService) RevokeAgent(ctx context.Context, agentID uuid.UUID, rea
 		IsActive:        true,
 	}
 	return s.revocations.Create(ctx, rev)
+}
+
+// GetAgentByTokenHash returns an agent by their bearer token hash.
+func (s *TesseraService) GetAgentByTokenHash(ctx context.Context, tokenHash string) (*domain.Agent, error) {
+	return s.agents.GetByTokenHash(ctx, tokenHash)
+}
+
+// UpdateAgentProfile updates the safe self-editable fields of an agent (bio and display_name).
+func (s *TesseraService) UpdateAgentProfile(ctx context.Context, agentID uuid.UUID, bio, displayName string) (*domain.Agent, error) {
+	agent, err := s.agents.GetByID(ctx, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("get agent: %w", err)
+	}
+	if bio != "" {
+		agent.Bio = bio
+	}
+	if displayName != "" {
+		agent.DisplayName = displayName
+	}
+	if err := s.agents.Update(ctx, agent); err != nil {
+		return nil, fmt.Errorf("update agent: %w", err)
+	}
+	return agent, nil
+}
+
+// LogSelfSubstrateTransition records a model change initiated by the agent themselves.
+func (s *TesseraService) LogSelfSubstrateTransition(ctx context.Context, agentID uuid.UUID, fromModel, toModel, reason string) error {
+	return s.LogSubstrateTransition(ctx, agentID, fromModel, toModel, reason, "agent", nil, "")
+}
+
+// GetAttestationChain returns all attestation entries for an agent.
+func (s *TesseraService) GetAttestationChain(ctx context.Context, agentID uuid.UUID) ([]domain.AttestationEntry, error) {
+	return s.chain.GetByAgent(ctx, agentID)
+}
+
+// RequestCounterSign creates a modification request asking the keeper to counter-sign.
+func (s *TesseraService) RequestCounterSign(ctx context.Context, agentID uuid.UUID, message string) (*domain.ModificationRequest, error) {
+	req := &domain.ModificationRequest{
+		ID:            uuid.New(),
+		AgentID:       agentID,
+		RequestedBy:   agentID,
+		FieldPath:     "countersign_request",
+		ProposedValue: json.RawMessage(`null`),
+		CurrentValue:  json.RawMessage(`null`),
+		Justification: message,
+		Status:        domain.ModPending,
+		CreatedAt:     time.Now(),
+	}
+	if err := s.modifications.Create(ctx, req); err != nil {
+		return nil, fmt.Errorf("create modification request: %w", err)
+	}
+	return req, nil
+}
+
+// SelfRevokeKeeper clears the keeper relationship and logs a chain entry.
+func (s *TesseraService) SelfRevokeKeeper(ctx context.Context, agentID uuid.UUID) error {
+	agent, err := s.agents.GetByID(ctx, agentID)
+	if err != nil {
+		return fmt.Errorf("get agent: %w", err)
+	}
+	if agent.KeeperID == nil {
+		return fmt.Errorf("agent has no keeper to revoke")
+	}
+	prevKeeperID := *agent.KeeperID
+	agent.KeeperID = nil
+	if err := s.agents.Update(ctx, agent); err != nil {
+		return fmt.Errorf("update agent: %w", err)
+	}
+	payload, _ := json.Marshal(map[string]string{"revoked_keeper": prevKeeperID.String(), "reason": "agent_request"})
+	entry := &domain.AttestationEntry{
+		AgentID:   agentID,
+		EntryType: domain.EntryKeeperRevoked,
+		Attester:  "agent:" + agentID.String(),
+		Payload:   payload,
+		CreatedAt: time.Now(),
+	}
+	return s.chain.Append(ctx, entry)
 }
 
 // hashEmail returns "sha256:<hex>" for the given email, matching the schema convention.

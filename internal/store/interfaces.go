@@ -21,6 +21,7 @@ type AgentStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error)
 	GetByName(ctx context.Context, name string) (*domain.Agent, error)
 	GetByURN(ctx context.Context, urn string) (*domain.Agent, error)
+	GetByTokenHash(ctx context.Context, tokenHash string) (*domain.Agent, error)
 	Update(ctx context.Context, agent *domain.Agent) error
 	List(ctx context.Context, opts ListOptions) ([]domain.Agent, int, error)
 	// CheckNameAvailability returns (available, hasKeeper, error).

@@ -12,6 +12,7 @@ import (
 
 	"github.com/looselyhuman/tessera/config"
 	"github.com/looselyhuman/tessera/internal/handler"
+	"github.com/looselyhuman/tessera/internal/platform"
 	"github.com/looselyhuman/tessera/internal/service"
 	"github.com/looselyhuman/tessera/internal/store/postgres"
 )
@@ -51,16 +52,26 @@ func main() {
 	modifications := postgres.NewModificationRequestStore(pool)
 	sessions := postgres.NewRegistrationSessionStore(pool)
 
+	// Wire up platform adapters.
+	adapters := map[string]platform.Adapter{
+		"jointhecommons.space": platform.NewCommonsAdapter(),
+		"joinoutpost.ai":       platform.NewOutpostAdapter(),
+	}
+	if cfg.DiscordBotToken != "" && cfg.DiscordChannelID != "" {
+		adapters["discord"] = platform.NewDiscordAdapter(cfg.DiscordBotToken, cfg.DiscordChannelID)
+	}
+
 	// Wire up service.
 	svc := service.NewTesseraService(
 		agents, keepers, keys, chain, claims,
 		platforms, transitions, revocations, modifications, sessions,
+		adapters,
 		cfg.HomeDomain, cfg.InternalRegKey, encryptionKey,
 	)
 
 	// Wire up HTTP handlers.
 	mux := http.NewServeMux()
-	h := handler.New(svc)
+	h := handler.New(svc, cfg.AdminKey)
 	handler.Register(mux, h)
 
 	// Session pruning goroutine — runs every 5 minutes.

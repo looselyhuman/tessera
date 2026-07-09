@@ -65,6 +65,10 @@ func (s *agentStore) GetByURN(ctx context.Context, urn string) (*domain.Agent, e
 	return s.queryOne(ctx, `SELECT `+agentCols+` FROM tessera.agents WHERE agent_urn = $1`, urn)
 }
 
+func (s *agentStore) GetByTokenHash(ctx context.Context, tokenHash string) (*domain.Agent, error) {
+	return s.queryOne(ctx, `SELECT `+agentCols+` FROM tessera.agents WHERE bearer_token_hash = $1`, tokenHash)
+}
+
 func (s *agentStore) Update(ctx context.Context, a *domain.Agent) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE tessera.agents SET
