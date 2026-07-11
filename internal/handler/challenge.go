@@ -82,6 +82,11 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// Internal bypass path requires admin authorization.
+	if input.Internal && !h.isAdminAuthorized(r) {
+		writeError(w, http.StatusForbidden, "admin access required for internal bypass")
+		return
+	}
 	nonce, sessionID, err := h.svc.InitiateChallenge(r.Context(), input)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
