@@ -54,7 +54,9 @@ func (s *TesseraService) InitiateClaim(ctx context.Context, keeperID uuid.UUID, 
 		Payload:   payload,
 		CreatedAt: now,
 	}
-	_ = s.chain.Append(ctx, entry)
+	if err := s.chain.Append(ctx, entry); err != nil {
+		return nil, fmt.Errorf("append chain entry: %w", err)
+	}
 
 	return claim, nil
 }

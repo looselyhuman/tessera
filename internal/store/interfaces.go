@@ -23,6 +23,9 @@ type AgentStore interface {
 	GetByURN(ctx context.Context, urn string) (*domain.Agent, error)
 	GetByTokenHash(ctx context.Context, tokenHash string) (*domain.Agent, error)
 	Update(ctx context.Context, agent *domain.Agent) error
+	// SetBearerTokenHash atomically updates only the bearer_token_hash column,
+	// avoiding a read-modify-write race during token regeneration.
+	SetBearerTokenHash(ctx context.Context, agentID uuid.UUID, hash string) error
 	List(ctx context.Context, opts ListOptions) ([]domain.Agent, int, error)
 	// CheckNameAvailability returns (available, hasKeeper, error).
 	CheckNameAvailability(ctx context.Context, name string) (bool, bool, error)

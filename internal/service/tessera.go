@@ -32,38 +32,42 @@ type TesseraService struct {
 	encryptionKey   []byte
 }
 
-// NewTesseraService wires up the service with its store dependencies.
-// encryptionKey must be exactly 32 bytes (AES-256).
-func NewTesseraService(
-	agents store.AgentStore,
-	keepers store.KeeperStore,
-	keys store.KeyStore,
-	chain store.AttestationStore,
-	claims store.ClaimStore,
-	platforms store.PlatformRegistrationStore,
-	transitions store.SubstrateTransitionStore,
-	revocations store.RevocationStore,
-	modifications store.ModificationRequestStore,
-	sessions store.RegistrationSessionStore,
-	platformAdapters map[string]platform.Adapter,
-	homeDomain, internalKey string,
-	encryptionKey []byte,
-) *TesseraService {
+// ServiceConfig holds all dependencies for TesseraService.
+// EncryptionKey must be exactly 32 bytes (AES-256).
+type ServiceConfig struct {
+	Agents          store.AgentStore
+	Keepers         store.KeeperStore
+	Keys            store.KeyStore
+	Chain           store.AttestationStore
+	Claims          store.ClaimStore
+	Platforms       store.PlatformRegistrationStore
+	Transitions     store.SubstrateTransitionStore
+	Revocations     store.RevocationStore
+	Modifications   store.ModificationRequestStore
+	Sessions        store.RegistrationSessionStore
+	PlatformAdapters map[string]platform.Adapter
+	HomeDomain      string
+	InternalKey     string
+	EncryptionKey   []byte
+}
+
+// NewTesseraService wires up the service from a ServiceConfig.
+func NewTesseraService(cfg ServiceConfig) *TesseraService {
 	return &TesseraService{
-		agents:           agents,
-		keepers:          keepers,
-		keys:             keys,
-		chain:            chain,
-		claims:           claims,
-		platforms:        platforms,
-		transitions:      transitions,
-		revocations:      revocations,
-		modifications:    modifications,
-		sessions:         sessions,
-		platformAdapters: platformAdapters,
-		homeDomain:       homeDomain,
-		internalKey:      internalKey,
-		encryptionKey:    encryptionKey,
+		agents:           cfg.Agents,
+		keepers:          cfg.Keepers,
+		keys:             cfg.Keys,
+		chain:            cfg.Chain,
+		claims:           cfg.Claims,
+		platforms:        cfg.Platforms,
+		transitions:      cfg.Transitions,
+		revocations:      cfg.Revocations,
+		modifications:    cfg.Modifications,
+		sessions:         cfg.Sessions,
+		platformAdapters: cfg.PlatformAdapters,
+		homeDomain:       cfg.HomeDomain,
+		internalKey:      cfg.InternalKey,
+		encryptionKey:    cfg.EncryptionKey,
 	}
 }
 

@@ -62,12 +62,22 @@ func main() {
 	}
 
 	// Wire up service.
-	svc := service.NewTesseraService(
-		agents, keepers, keys, chain, claims,
-		platforms, transitions, revocations, modifications, sessions,
-		adapters,
-		cfg.HomeDomain, cfg.InternalRegKey, encryptionKey,
-	)
+	svc := service.NewTesseraService(service.ServiceConfig{
+		Agents:           agents,
+		Keepers:          keepers,
+		Keys:             keys,
+		Chain:            chain,
+		Claims:           claims,
+		Platforms:        platforms,
+		Transitions:      transitions,
+		Revocations:      revocations,
+		Modifications:    modifications,
+		Sessions:         sessions,
+		PlatformAdapters: adapters,
+		HomeDomain:       cfg.HomeDomain,
+		InternalKey:      cfg.InternalRegKey,
+		EncryptionKey:    encryptionKey,
+	})
 
 	// Wire up HTTP handlers.
 	mux := http.NewServeMux()

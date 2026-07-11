@@ -92,7 +92,9 @@ func (s *TesseraService) CreateModificationRequest(ctx context.Context, agentID 
 		Payload:   payload,
 		CreatedAt: now,
 	}
-	_ = s.chain.Append(ctx, entry)
+	if err := s.chain.Append(ctx, entry); err != nil {
+		return nil, fmt.Errorf("append chain entry: %w", err)
+	}
 
 	return req, nil
 }
@@ -118,7 +120,9 @@ func (s *TesseraService) CounterSign(ctx context.Context, agentName, signature s
 		Payload:   payload,
 		CreatedAt: time.Now(),
 	}
-	_ = s.chain.Append(ctx, entry)
+	if err := s.chain.Append(ctx, entry); err != nil {
+		return nil, fmt.Errorf("append chain entry: %w", err)
+	}
 
 	return agent, nil
 }
@@ -167,9 +171,8 @@ func (s *TesseraService) AdminRegenerateToken(ctx context.Context, agentName str
 		return "", fmt.Errorf("generate token: %w", err)
 	}
 	token := base64.URLEncoding.EncodeToString(raw)
-	agent.BearerTokenHash = tessera_crypto.SHA256Hex([]byte(token))
-	agent.UpdatedAt = time.Now()
-	if err := s.agents.Update(ctx, agent); err != nil {
+	hash := tessera_crypto.SHA256Hex([]byte(token))
+	if err := s.agents.SetBearerTokenHash(ctx, agent.ID, hash); err != nil {
 		return "", fmt.Errorf("store token hash: %w", err)
 	}
 	return token, nil

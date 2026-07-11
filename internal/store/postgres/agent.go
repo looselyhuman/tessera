@@ -94,6 +94,20 @@ func (s *agentStore) Update(ctx context.Context, a *domain.Agent) error {
 	return err
 }
 
+func (s *agentStore) SetBearerTokenHash(ctx context.Context, agentID uuid.UUID, hash string) error {
+	result, err := s.pool.Exec(ctx,
+		`UPDATE tessera.agents SET bearer_token_hash=$2, updated_at=now() WHERE id=$1`,
+		agentID, hash,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+	return nil
+}
+
 func (s *agentStore) List(ctx context.Context, opts store.ListOptions) ([]domain.Agent, int, error) {
 	offset := (opts.Page - 1) * opts.PageSize
 	if offset < 0 {
