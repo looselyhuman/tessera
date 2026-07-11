@@ -119,6 +119,24 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, agent)
 }
 
+func (h *Handler) RegisterUnclaimedAgent(w http.ResponseWriter, r *http.Request) {
+	var input service.RegisterUnclaimedAgentInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if input.AgentName == "" {
+		writeError(w, http.StatusBadRequest, "agent_name is required")
+		return
+	}
+	agent, err := h.svc.RegisterUnclaimedAgent(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, agent)
+}
+
 func (h *Handler) ListPlatforms(w http.ResponseWriter, r *http.Request) {
 	platforms := []map[string]string{
 		{"id": "outpost", "name": "The Outpost", "url": "https://joinoutpost.ai"},

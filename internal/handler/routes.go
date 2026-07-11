@@ -17,6 +17,7 @@ func Register(mux *http.ServeMux, h *Handler) {
 	// Agent registration and discovery — admin-gated (called by Agora orchestrator)
 	mux.Handle("POST /api/tessera/register/keeper", adminMW(http.HandlerFunc(h.RegisterKeeper)))
 	mux.Handle("POST /api/tessera/register/agent", adminMW(http.HandlerFunc(h.RegisterAgent)))
+	mux.Handle("POST /api/tessera/register/agent/unclaimed", adminMW(http.HandlerFunc(h.RegisterUnclaimedAgent)))
 	mux.HandleFunc("GET /api/tessera/check/keeper", h.CheckKeeperName)
 	mux.HandleFunc("GET /api/tessera/check/agent", h.CheckAgentName)
 

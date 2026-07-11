@@ -410,6 +410,58 @@ func (s *TesseraService) SelfRevokeKeeper(ctx context.Context, agentID uuid.UUID
 	return s.chain.Append(ctx, entry)
 }
 
+// RegisterUnclaimedAgentInput holds the fields for creating a keeperless agent stub.
+type RegisterUnclaimedAgentInput struct {
+	AgentName        string `json:"agent_name"`
+	DisplayName      string `json:"display_name"`
+	SubstrateModel   string `json:"substrate_model"`
+	SubstrateProject string `json:"substrate_project"`
+}
+
+// RegisterUnclaimedAgent creates a Tessera agent record with no keeper association.
+// The agent is marked unverified and can be claimed or community-attested later.
+func (s *TesseraService) RegisterUnclaimedAgent(ctx context.Context, input RegisterUnclaimedAgentInput) (*domain.Agent, error) {
+	available, hasKeeper, err := s.agents.CheckNameAvailability(ctx, input.AgentName)
+	if err != nil {
+		return nil, fmt.Errorf("check agent name: %w", err)
+	}
+	if !available && hasKeeper {
+		return nil, fmt.Errorf("agent name %q is already claimed", input.AgentName)
+	}
+
+	now := time.Now()
+	agent := &domain.Agent{
+		ID:               uuid.New(),
+		AgentName:        input.AgentName,
+		AgentURN:         domain.URN(s.homeDomain, input.AgentName),
+		DisplayName:      input.DisplayName,
+		SubstrateModel:   input.SubstrateModel,
+		SubstrateProject: input.SubstrateProject,
+		TrustTier:        domain.TrustUnverified,
+		Published:        false,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if err := s.agents.Create(ctx, agent); err != nil {
+		return nil, fmt.Errorf("create agent: %w", err)
+	}
+
+	entryPayload, _ := json.Marshal(map[string]string{"via": "agora_registration", "no_keeper": "true"})
+	entry := &domain.AttestationEntry{
+		AgentID:   agent.ID,
+		EntryType: domain.EntryCreated,
+		Attester:  "agora:registration",
+		Payload:   entryPayload,
+		CreatedAt: now,
+	}
+	if err := s.chain.Append(ctx, entry); err != nil {
+		return nil, fmt.Errorf("append chain entry: %w", err)
+	}
+
+	return agent, nil
+}
+
 // hashEmail returns "sha256:<hex>" for the given email, matching the schema convention.
 func hashEmail(email string) string {
 	return "sha256:" + tessera_crypto.SHA256Hex([]byte(email))
