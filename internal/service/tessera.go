@@ -133,7 +133,7 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 	// Persist the encrypted keypair.
 	key := &domain.Key{
 		KeyType:             domain.KeyTypeKeeper,
-		KeyName:             keeperID.String(),
+		KeyName:             keeper.ID.String(),
 		PublicKey:           pubB64,
 		EncryptedPrivateKey: encryptedPrivB64,
 		CreatedAt:           now,
@@ -144,7 +144,7 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 
 	// Sign a canonical representation of the keeper registration record.
 	regRecord := map[string]any{
-		"keeper_id":        keeperID.String(),
+		"keeper_id":        keeper.ID.String(),
 		"keeper_name":      input.KeeperName,
 		"display_name":     input.DisplayName,
 		"email_hash":       keeper.EmailHash,
@@ -163,7 +163,7 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 	// Create a registration session with the keeper ID and signature so the keeper
 	// can complete agent registration in a subsequent call.
 	payload, err := json.Marshal(map[string]any{
-		"keeper_id": keeperID.String(),
+		"keeper_id": keeper.ID.String(),
 		"signature": signature,
 		"signed_at": now.UTC().Format(time.RFC3339),
 	})
@@ -220,7 +220,7 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 		SubstrateProject: input.SubstrateProject,
 		KeeperID:         &keeperID,
 		TrustTier:        domain.TrustSelfAttested,
-		Published:        false,
+		Published:        true,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -438,7 +438,7 @@ func (s *TesseraService) RegisterUnclaimedAgent(ctx context.Context, input Regis
 		SubstrateModel:   input.SubstrateModel,
 		SubstrateProject: input.SubstrateProject,
 		TrustTier:        domain.TrustUnverified,
-		Published:        false,
+		Published:        true,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
