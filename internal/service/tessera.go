@@ -197,8 +197,14 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 		return nil, fmt.Errorf("agent name %q is already claimed", input.AgentName)
 	}
 
+	// Look up keeper record to get the key name (stored by keeper_name, not UUID).
+	keeper, err := s.keepers.GetByID(ctx, keeperID)
+	if err != nil {
+		return nil, fmt.Errorf("get keeper: %w", err)
+	}
+
 	// Retrieve and decrypt the keeper's private key for signing.
-	keeperKey, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypeKeeper, keeperID.String())
+	keeperKey, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypeKeeper, keeper.KeeperName)
 	if err != nil {
 		return nil, fmt.Errorf("get keeper key: %w", err)
 	}
