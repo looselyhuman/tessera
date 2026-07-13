@@ -73,10 +73,11 @@ func NewTesseraService(cfg ServiceConfig) *TesseraService {
 
 // RegisterKeeperInput is the input for keeper registration step 1.
 type RegisterKeeperInput struct {
-	KeeperName      string `json:"keeper_name"`
-	DisplayName     string `json:"display_name"`
-	Email           string `json:"email"`
-	KeeperStatement string `json:"keeper_statement"`
+	KeeperName      string     `json:"keeper_name"`
+	DisplayName     string     `json:"display_name"`
+	Email           string     `json:"email"`
+	KeeperStatement string     `json:"keeper_statement"`
+	UserID          *uuid.UUID `json:"user_id,omitempty"`
 }
 
 // RegisterAgentInput is the input for agent registration step 2.
@@ -124,6 +125,7 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 		EmailHash:       hashEmail(input.Email),
 		PublicKey:       pubB64,
 		KeeperStatement: input.KeeperStatement,
+		UserID:          input.UserID,
 		CreatedAt:       now,
 	}
 	if err := s.keepers.Create(ctx, keeper); err != nil {
@@ -133,7 +135,7 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 	// Persist the encrypted keypair.
 	key := &domain.Key{
 		KeyType:             domain.KeyTypeKeeper,
-		KeyName:             keeper.ID.String(),
+		KeyName:             keeper.KeeperName,
 		PublicKey:           pubB64,
 		EncryptedPrivateKey: encryptedPrivB64,
 		CreatedAt:           now,
