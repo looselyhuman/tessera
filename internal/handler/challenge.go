@@ -26,6 +26,26 @@ func (h *Handler) RegisterKeeper(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"session_id": sessionID})
 }
 
+func (h *Handler) RefreshKeeperSession(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		KeeperName string `json:"keeper_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if input.KeeperName == "" {
+		writeError(w, http.StatusBadRequest, "keeper_name is required")
+		return
+	}
+	sessionID, err := h.svc.RefreshKeeperSession(r.Context(), input.KeeperName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"session_id": sessionID})
+}
+
 func (h *Handler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	var input service.RegisterAgentInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {

@@ -186,6 +186,37 @@ func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeepe
 	return sess.ID, nil
 }
 
+// RefreshKeeperSession creates a new registration session for an existing keeper.
+// Used when the original session has expired but the keeper needs to register another agent.
+func (s *TesseraService) RefreshKeeperSession(ctx context.Context, keeperName string) (uuid.UUID, error) {
+	keeper, err := s.keepers.GetByName(ctx, keeperName)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("keeper not found: %w", err)
+	}
+
+	now := time.Now()
+	payload, err := json.Marshal(map[string]any{
+		"keeper_id":  keeper.ID.String(),
+		"refreshed":  true,
+		"created_at": now.UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("marshal session payload: %w", err)
+	}
+
+	sess := &domain.RegistrationSession{
+		ID:          uuid.New(),
+		SessionType: domain.SessionKeeper,
+		Payload:     payload,
+		ExpiresAt:   now.Add(30 * time.Minute),
+		CreatedAt:   now,
+	}
+	if err := s.sessions.Create(ctx, sess); err != nil {
+		return uuid.Nil, fmt.Errorf("create registration session: %w", err)
+	}
+	return sess.ID, nil
+}
+
 // RegisterAgent creates an agent record under a verified keeper, signing the agent
 // registration record with the keeper's Ed25519 private key.
 func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, input RegisterAgentInput) (*domain.Agent, error) {
