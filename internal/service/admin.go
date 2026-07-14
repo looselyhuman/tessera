@@ -107,7 +107,11 @@ func (s *TesseraService) CounterSign(ctx context.Context, agentName, signature s
 		return nil, err
 	}
 
-	if agent.KeeperID != nil && signature != "" {
+	if signature == "" {
+		return nil, fmt.Errorf("signature is required for counter-sign")
+	}
+
+	if agent.KeeperID != nil {
 		keeper, err := s.keepers.GetByID(ctx, *agent.KeeperID)
 		if err != nil {
 			return nil, fmt.Errorf("get keeper for counter-sign verification: %w", err)
@@ -138,12 +142,17 @@ func (s *TesseraService) CounterSign(ctx context.Context, agentName, signature s
 		return nil, fmt.Errorf("update agent: %w", err)
 	}
 
+	attester := "admin"
+	if agent.KeeperID != nil {
+		attester = fmt.Sprintf("keeper:%s", agent.KeeperID.String())
+	}
 	payload, _ := json.Marshal(map[string]string{"signature": signature})
 	entry := &domain.AttestationEntry{
 		AgentID:   agent.ID,
 		EntryType: domain.EntryCounterSigned,
-		Attester:  "admin",
+		Attester:  attester,
 		Payload:   payload,
+		Signature: signature,
 		CreatedAt: time.Now(),
 	}
 	if err := s.chain.Append(ctx, entry); err != nil {

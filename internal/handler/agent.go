@@ -244,7 +244,6 @@ func (h *Handler) VerifyExternal(w http.ResponseWriter, r *http.Request) {
 		"display_name":    agent.DisplayName,
 		"trust_tier":      agent.TrustTier,
 		"published":       agent.Published,
-		"keeper_id":       agent.KeeperID,
 		"source_platform": agent.SourcePlatform,
 	})
 }
