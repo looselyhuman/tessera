@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
@@ -208,6 +209,9 @@ func (s *agentStore) queryOne(ctx context.Context, sql string, args ...any) (*do
 	row := s.pool.QueryRow(ctx, sql, args...)
 	var a domain.Agent
 	if err := scanAgent(row, &a); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 	return &a, nil

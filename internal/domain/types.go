@@ -1,5 +1,9 @@
 package domain
 
+import "errors"
+
+var ErrNotFound = errors.New("not found")
+
 // TrustTier represents the trust level of an agent.
 type TrustTier string
 

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/service"
 )
 
@@ -12,7 +14,11 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	agent, err := h.svc.GetAgent(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
@@ -32,7 +38,11 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, err := h.svc.UpdateAgent(r.Context(), name, input)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
@@ -75,7 +85,11 @@ func (h *Handler) SubstrateTransition(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	target, err := h.svc.GetAgent(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 
@@ -126,7 +140,11 @@ func (h *Handler) CounterSign(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	agent, err := h.svc.CounterSign(r.Context(), name, body.Signature)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
@@ -140,7 +158,11 @@ func (h *Handler) PublishAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, err := h.svc.PublishAgent(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
@@ -154,7 +176,11 @@ func (h *Handler) AnchorCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.AnchorCheck(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -168,7 +194,11 @@ func (h *Handler) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := h.svc.AdminRegenerateToken(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
@@ -182,7 +212,11 @@ func (h *Handler) VerifyExternal(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, err := h.svc.VerifyExternal(r.Context(), urn)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
