@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
 )
 
 // WellKnownAgent returns the signed Tessera JSON for a published agent.
+// Chain entries are verified on each read; failures are logged as warnings but do not block the response.
 func (s *TesseraService) WellKnownAgent(ctx context.Context, name string) (json.RawMessage, error) {
 	agent, err := s.agents.GetByName(ctx, name)
 	if err != nil {
@@ -18,6 +20,24 @@ func (s *TesseraService) WellKnownAgent(ctx context.Context, name string) (json.
 	if !agent.Published {
 		return nil, fmt.Errorf("agent %q is not published", name)
 	}
+
+	report, err := s.VerifyChainIntegrity(ctx, agent.ID)
+	if err != nil {
+		slog.Warn("chain integrity check failed", "agent", name, "error", err)
+	} else {
+		for _, e := range report.Entries {
+			if e.Checked && !e.Valid {
+				slog.Warn("chain entry failed verification",
+					"agent", name,
+					"entry_id", e.EntryID,
+					"entry_type", e.EntryType,
+					"attester", e.Attester,
+					"error", e.Error,
+				)
+			}
+		}
+	}
+
 	if agent.TesseraJSON != nil {
 		return agent.TesseraJSON, nil
 	}

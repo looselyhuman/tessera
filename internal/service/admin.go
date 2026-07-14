@@ -100,11 +100,37 @@ func (s *TesseraService) CreateModificationRequest(ctx context.Context, agentID 
 }
 
 // CounterSign marks the agent as counter-signed and appends a chain entry.
+// The incoming signature is verified against the agent's keeper public key before being accepted.
 func (s *TesseraService) CounterSign(ctx context.Context, agentName, signature string) (*domain.Agent, error) {
 	agent, err := s.agents.GetByName(ctx, agentName)
 	if err != nil {
 		return nil, err
 	}
+
+	if agent.KeeperID != nil && signature != "" {
+		keeper, err := s.keepers.GetByID(ctx, *agent.KeeperID)
+		if err != nil {
+			return nil, fmt.Errorf("get keeper for counter-sign verification: %w", err)
+		}
+		sigData := map[string]any{
+			"agent_id":   agent.ID.String(),
+			"agent_name": agent.AgentName,
+			"agent_urn":  agent.AgentURN,
+			"keeper_id":  agent.KeeperID.String(),
+		}
+		canonical, err := tessera_crypto.Canonicalize(sigData)
+		if err != nil {
+			return nil, fmt.Errorf("canonicalize counter-sign data: %w", err)
+		}
+		ok, err := tessera_crypto.Verify(keeper.PublicKey, canonical, signature)
+		if err != nil {
+			return nil, fmt.Errorf("verify counter-sign: %w", err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("counter-sign signature is invalid")
+		}
+	}
+
 	agent.CountersignRequested = false
 	agent.PlatformSignature = signature
 	agent.UpdatedAt = time.Now()

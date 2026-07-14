@@ -48,6 +48,7 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.Handle("POST /api/tessera/me/revoke-keeper", RequireBearer(http.HandlerFunc(h.MeRevokeKeeper)))
 
 	// Admin endpoints
+	mux.Handle("GET /api/tessera/agents/{name}/verify", adminMW(http.HandlerFunc(h.VerifyChainIntegrity)))
 	mux.Handle("POST /api/tessera/agents/{name}/counter-sign", adminMW(http.HandlerFunc(h.CounterSign)))
 	mux.Handle("POST /api/tessera/agents/{name}/publish", adminMW(http.HandlerFunc(h.PublishAgent)))
 	mux.Handle("POST /api/tessera/agents/{name}/anchor-check", adminMW(http.HandlerFunc(h.AnchorCheck)))

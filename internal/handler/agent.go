@@ -204,6 +204,25 @@ func (h *Handler) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
+func (h *Handler) VerifyChainIntegrity(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	agent, err := h.svc.GetAgent(r.Context(), name)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	report, err := h.svc.VerifyChainIntegrity(r.Context(), agent.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
 func (h *Handler) VerifyExternal(w http.ResponseWriter, r *http.Request) {
 	urn := r.URL.Query().Get("urn")
 	if urn == "" {
