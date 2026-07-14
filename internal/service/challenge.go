@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
 	"github.com/looselyhuman/tessera/internal/domain"
 )
 
@@ -63,21 +65,22 @@ type VerifyChallengeInput struct {
 }
 
 // VerifyChallenge confirms the nonce was posted and promotes the session to a registered agent.
-func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChallengeInput) (*domain.Agent, error) {
+// Returns the agent and a raw bearer token (only exposed once; store the token securely).
+func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChallengeInput) (*domain.Agent, string, error) {
 	sess, err := s.sessions.Get(ctx, input.SessionID)
 	if err != nil {
-		return nil, fmt.Errorf("get session: %w", err)
+		return nil, "", fmt.Errorf("get session: %w", err)
 	}
 	if time.Now().After(sess.ExpiresAt) {
-		return nil, fmt.Errorf("challenge session expired")
+		return nil, "", fmt.Errorf("challenge session expired")
 	}
 	if sess.SessionType != domain.SessionChallenge {
-		return nil, fmt.Errorf("session is not a challenge session")
+		return nil, "", fmt.Errorf("session is not a challenge session")
 	}
 
 	var payload map[string]any
 	if err := json.Unmarshal(sess.Payload, &payload); err != nil {
-		return nil, fmt.Errorf("unmarshal session payload: %w", err)
+		return nil, "", fmt.Errorf("unmarshal session payload: %w", err)
 	}
 
 	agentName, _ := payload["agent_name"].(string)
@@ -86,7 +89,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 
 	// C2: consume the session before any verification to close the replay race window.
 	if err := s.sessions.Delete(ctx, sess.ID); err != nil {
-		return nil, fmt.Errorf("consume session: %w", err)
+		return nil, "", fmt.Errorf("consume session: %w", err)
 	}
 
 	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
@@ -98,19 +101,19 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 
 	adapter, ok := s.platformAdapters[platform]
 	if !ok {
-		return nil, fmt.Errorf("unsupported platform %q", platform)
+		return nil, "", fmt.Errorf("unsupported platform %q", platform)
 	}
 	found, err := adapter.VerifyNonce(ctx, agentName, nonce)
 	if err != nil {
-		return nil, fmt.Errorf("platform verification: %w", err)
+		return nil, "", fmt.Errorf("platform verification: %w", err)
 	}
 	if !found {
-		return nil, fmt.Errorf("nonce not found on %s — post the nonce and try again", platform)
+		return nil, "", fmt.Errorf("nonce not found on %s — post the nonce and try again", platform)
 	}
 	return s.createChallengeAgent(ctx, agentName, platform, sess)
 }
 
-func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform string, sess *domain.RegistrationSession) (*domain.Agent, error) {
+func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform string, sess *domain.RegistrationSession) (*domain.Agent, string, error) {
 	now := time.Now()
 	attestationJSON, _ := json.Marshal(map[string]any{
 		"source":      "challenge_post",
@@ -132,7 +135,18 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 	}
 
 	if err := s.agents.Create(ctx, agent); err != nil {
-		return nil, fmt.Errorf("create agent: %w", err)
+		return nil, "", fmt.Errorf("create agent: %w", err)
+	}
+
+	// Generate a bearer token for the new agent (only time the raw token is exposed).
+	rawToken := make([]byte, 32)
+	if _, err := rand.Read(rawToken); err != nil {
+		return nil, "", fmt.Errorf("generate bearer token: %w", err)
+	}
+	token := base64.URLEncoding.EncodeToString(rawToken)
+	tokenHash := tessera_crypto.SHA256Hex([]byte(token))
+	if err := s.agents.SetBearerTokenHash(ctx, agent.ID, tokenHash); err != nil {
+		return nil, "", fmt.Errorf("store bearer token: %w", err)
 	}
 
 	entryPayload, _ := json.Marshal(map[string]any{
@@ -147,10 +161,10 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 		CreatedAt: now,
 	}
 	if err := s.chain.Append(ctx, entry); err != nil {
-		return nil, fmt.Errorf("append chain: %w", err)
+		return nil, "", fmt.Errorf("append chain: %w", err)
 	}
 
-	return agent, nil
+	return agent, token, nil
 }
 
 func generateNonce() (string, error) {

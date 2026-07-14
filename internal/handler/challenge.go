@@ -131,12 +131,16 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	agent, err := h.svc.VerifyChallenge(r.Context(), input)
+	agent, token, err := h.svc.VerifyChallenge(r.Context(), input)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, agent)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"agent_name":   agent.AgentName,
+		"agent_urn":    agent.AgentURN,
+		"bearer_token": token,
+	})
 }
 
 func (h *Handler) RegisterUnclaimedAgent(w http.ResponseWriter, r *http.Request) {
