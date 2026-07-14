@@ -49,3 +49,12 @@ func (h *Handler) WellKnownARDCatalog(w http.ResponseWriter, r *http.Request) {
 		"agents":         catalog,
 	})
 }
+
+func (h *Handler) WellKnownRegistry(w http.ResponseWriter, r *http.Request) {
+	registry, err := h.svc.GetSignedRegistry(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, registry)
+}

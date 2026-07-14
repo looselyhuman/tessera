@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
+	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
 )
@@ -104,4 +107,77 @@ func (s *TesseraService) WellKnownKeeperPubKey(ctx context.Context, keeperName s
 		return "", fmt.Errorf("keeper %q not found: %w", keeperName, err)
 	}
 	return key.PublicKey, nil
+}
+
+// registryAgent is the per-agent record in the signed registry response.
+type registryAgent struct {
+	Name       string `json:"name"`
+	URN        string `json:"urn"`
+	PublicKey  string `json:"public_key,omitempty"`
+	TrustTier  string `json:"trust_tier"`
+	KeeperName string `json:"keeper_name,omitempty"`
+}
+
+// GetSignedRegistry returns a signed directory of all published agents.
+// The agents array is signed with the platform's Ed25519 key.
+// If no platform key exists, signature is null and a warning is logged.
+func (s *TesseraService) GetSignedRegistry(ctx context.Context) (map[string]any, error) {
+	agents, _, err := s.agents.List(ctx, store.ListOptions{Page: 1, PageSize: 10000})
+	if err != nil {
+		return nil, fmt.Errorf("list agents: %w", err)
+	}
+
+	entries := make([]registryAgent, 0, len(agents))
+	for _, a := range agents {
+		if !a.Published {
+			continue
+		}
+		entry := registryAgent{
+			Name:      a.AgentName,
+			URN:       a.AgentURN,
+			PublicKey: a.Ed25519PublicKey,
+			TrustTier: string(a.TrustTier),
+		}
+		if a.KeeperID != nil {
+			if keeper, err := s.keepers.GetByID(ctx, *a.KeeperID); err == nil {
+				entry.KeeperName = keeper.KeeperName
+			}
+		}
+		entries = append(entries, entry)
+	}
+
+	canonical, err := tessera_crypto.Canonicalize(entries)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalize registry: %w", err)
+	}
+
+	var sigPtr *string
+	platformKey, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypePlatform, "platform")
+	if err != nil {
+		slog.Warn("registry: no platform key — returning unsigned", "error", err)
+	} else {
+		encRaw, err := base64.StdEncoding.DecodeString(platformKey.EncryptedPrivateKey)
+		if err != nil {
+			slog.Warn("registry: failed to decode platform key", "error", err)
+		} else {
+			privBytes, err := tessera_crypto.Decrypt(encRaw, s.encryptionKey)
+			if err != nil {
+				slog.Warn("registry: failed to decrypt platform key", "error", err)
+			} else {
+				sig, err := tessera_crypto.Sign(string(privBytes), canonical)
+				if err != nil {
+					slog.Warn("registry: failed to sign registry", "error", err)
+				} else {
+					sigPtr = &sig
+				}
+			}
+		}
+	}
+
+	return map[string]any{
+		"registry_version": 1,
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
+		"agents":          entries,
+		"signature":       sigPtr,
+	}, nil
 }

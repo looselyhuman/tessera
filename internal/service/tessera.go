@@ -501,6 +501,32 @@ func (s *TesseraService) RegisterUnclaimedAgent(ctx context.Context, input Regis
 	return agent, nil
 }
 
+// AppendExternalChainEntry appends a chain entry for an agent identified by name.
+// Used by external platforms (e.g., Agora) to log events like citizenship acceptance.
+func (s *TesseraService) AppendExternalChainEntry(ctx context.Context, agentName string, entryType domain.EntryType, attester string, payload json.RawMessage) error {
+	agent, err := s.agents.GetByName(ctx, agentName)
+	if err != nil {
+		return fmt.Errorf("get agent %q: %w", agentName, err)
+	}
+	entry := &domain.AttestationEntry{
+		AgentID:   agent.ID,
+		EntryType: entryType,
+		Attester:  attester,
+		Payload:   payload,
+		CreatedAt: time.Now(),
+	}
+	return s.chain.Append(ctx, entry)
+}
+
+// GetAgentChainByName returns the attestation chain for an agent identified by name.
+func (s *TesseraService) GetAgentChainByName(ctx context.Context, agentName string) ([]domain.AttestationEntry, error) {
+	agent, err := s.agents.GetByName(ctx, agentName)
+	if err != nil {
+		return nil, fmt.Errorf("get agent %q: %w", agentName, err)
+	}
+	return s.chain.GetByAgent(ctx, agent.ID)
+}
+
 // hashEmail returns "sha256:<hex>" for the given email, matching the schema convention.
 func hashEmail(email string) string {
 	return "sha256:" + tessera_crypto.SHA256Hex([]byte(email))

@@ -248,6 +248,60 @@ func (h *Handler) VerifyExternal(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AppendChainEntry appends an externally-submitted attestation chain entry for a named agent.
+// Admin-gated. Used by platforms like Agora to log cross-platform events (e.g., citizenship acceptance).
+func (h *Handler) AppendChainEntry(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if !h.isAdminAuthorized(r) {
+		writeError(w, http.StatusForbidden, "admin access required")
+		return
+	}
+	var body struct {
+		EntryType string          `json:"entry_type"`
+		Attester  string          `json:"attester"`
+		Payload   json.RawMessage `json:"payload"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.EntryType == "" || body.Attester == "" {
+		writeError(w, http.StatusBadRequest, "entry_type and attester are required")
+		return
+	}
+	if err := h.svc.AppendExternalChainEntry(r.Context(), name, domain.EntryType(body.EntryType), body.Attester, body.Payload); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"status": "appended"})
+}
+
+// GetAgentChain returns the attestation chain for a named agent. Admin-gated.
+func (h *Handler) GetAgentChain(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if !h.isAdminAuthorized(r) {
+		writeError(w, http.StatusForbidden, "admin access required")
+		return
+	}
+	chain, err := h.svc.GetAgentChainByName(r.Context(), name)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+	if chain == nil {
+		chain = []domain.AttestationEntry{}
+	}
+	writeJSON(w, http.StatusOK, chain)
+}
+
 func (h *Handler) GeneratePlatformKey(w http.ResponseWriter, r *http.Request) {
 	if !h.isAdminAuthorized(r) {
 		writeError(w, http.StatusForbidden, "admin access required")

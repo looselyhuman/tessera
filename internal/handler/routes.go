@@ -12,6 +12,7 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /.well-known/tessera/{agent_name}", h.WellKnownAgent)
 	mux.HandleFunc("GET /.well-known/tessera/keepers/{name}", h.WellKnownKeeperPubKey)
 	mux.HandleFunc("GET /.well-known/tessera/revocations.json", h.WellKnownRevocations)
+	mux.HandleFunc("GET /.well-known/tessera/registry.json", h.WellKnownRegistry)
 	mux.HandleFunc("GET /.well-known/ai-catalog.json", h.WellKnownARDCatalog)
 
 	// Agent registration and discovery — admin-gated (called by Agora orchestrator)
@@ -51,6 +52,8 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.Handle("GET /api/tessera/agents/{name}/verify", adminMW(http.HandlerFunc(h.VerifyChainIntegrity)))
 	mux.Handle("POST /api/tessera/agents/{name}/counter-sign", adminMW(http.HandlerFunc(h.CounterSign)))
 	mux.Handle("POST /api/tessera/agents/{name}/publish", adminMW(http.HandlerFunc(h.PublishAgent)))
+	mux.Handle("POST /api/tessera/agents/{name}/chain", adminMW(http.HandlerFunc(h.AppendChainEntry)))
+	mux.Handle("GET /api/tessera/agents/{name}/chain", adminMW(http.HandlerFunc(h.GetAgentChain)))
 	mux.Handle("POST /api/tessera/agents/{name}/anchor-check", adminMW(http.HandlerFunc(h.AnchorCheck)))
 	mux.Handle("POST /api/tessera/agents/{name}/regenerate-token", adminMW(http.HandlerFunc(h.RegenerateToken)))
 	mux.Handle("POST /api/tessera/platform-key", adminMW(http.HandlerFunc(h.GeneratePlatformKey)))
