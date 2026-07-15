@@ -100,6 +100,16 @@ func (s *TesseraService) WellKnownARDCatalog(ctx context.Context) ([]map[string]
 	return catalog, nil
 }
 
+// WellKnownPlatformPub returns the platform Ed25519 public key in base64.
+// Returns an error if no platform key has been generated yet.
+func (s *TesseraService) WellKnownPlatformPub(ctx context.Context) (string, error) {
+	key, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypePlatform, "platform")
+	if err != nil {
+		return "", fmt.Errorf("platform key not found: %w", err)
+	}
+	return key.PublicKey, nil
+}
+
 // WellKnownKeeperPubKey returns the base64 public key for a named keeper.
 func (s *TesseraService) WellKnownKeeperPubKey(ctx context.Context, keeperName string) (string, error) {
 	key, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypeKeeper, keeperName)
