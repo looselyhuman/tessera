@@ -139,6 +139,8 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcCreateKeeper))))
 	mux.Handle("GET /svc/v1/keepers/{name}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeper))))
+	mux.Handle("GET /svc/v1/keepers/by-id/{id}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeperByID))))
 	mux.Handle("GET /svc/v1/keepers/by-user/{user_id}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeperByUserID))))
 	mux.Handle("GET /svc/v1/keepers/{name}/agents",
