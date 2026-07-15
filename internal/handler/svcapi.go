@@ -403,6 +403,30 @@ func (h *Handler) SvcUpdateClaimStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, claim)
 }
 
+func (h *Handler) SvcResolveToken(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		TokenHash string `json:"token_hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.TokenHash == "" {
+		writeError(w, http.StatusBadRequest, "token_hash is required")
+		return
+	}
+	agent, err := h.svc.SvcResolveToken(r.Context(), body.TokenHash)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, agent)
+}
+
 func (h *Handler) SvcHasPendingClaim(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	agentName := q.Get("agent_name")

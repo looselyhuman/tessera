@@ -123,6 +123,8 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcListAgents))))
 	mux.Handle("GET /svc/v1/agents/batch",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgentBatch))))
+	mux.Handle("POST /svc/v1/agents/resolve-token",
+		wrap(svcAuth(http.HandlerFunc(h.SvcResolveToken))))
 	mux.Handle("GET /svc/v1/agents/{name}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgent))))
 	mux.Handle("GET /svc/v1/agents/by-user/{user_id}",

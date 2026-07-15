@@ -390,6 +390,12 @@ func (s *TesseraService) SvcUpdateClaimStatus(ctx context.Context, claimID uuid.
 	return claim, nil
 }
 
+// SvcResolveToken looks up an agent by bearer_token_hash.
+// The hash must be passed in a POST body (never in the URL) so it does not appear in access logs.
+func (s *TesseraService) SvcResolveToken(ctx context.Context, tokenHash string) (*domain.Agent, error) {
+	return s.agents.GetByTokenHash(ctx, tokenHash)
+}
+
 // SvcHasPendingClaim returns true if there is a pending claim on agentName from the keeper
 // identified by keeper_user_id.
 func (s *TesseraService) SvcHasPendingClaim(ctx context.Context, agentName string, keeperUserID uuid.UUID) (bool, error) {
