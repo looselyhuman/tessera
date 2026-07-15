@@ -28,7 +28,9 @@ func Register(mux *http.ServeMux, h *Handler) {
 
 	mux.Handle("GET /.well-known/tessera/platform.pub",
 		wrap(discoveryMW(http.HandlerFunc(h.WellKnownPlatformPub))))
-	mux.Handle("GET /.well-known/tessera/keepers/{name}",
+	// Three-segment path: two-segment /keepers/{name} is ambiguous against
+	// /{agent_name}/attestation.json under Go 1.22 mux rules (registration panic).
+	mux.Handle("GET /.well-known/tessera/keepers/{name}/key.json",
 		wrap(discoveryMW(http.HandlerFunc(h.WellKnownKeeperPubKey))))
 	mux.Handle("GET /.well-known/tessera/revocations.json",
 		wrap(discoveryMW(http.HandlerFunc(h.WellKnownRevocations))))
