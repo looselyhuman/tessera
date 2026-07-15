@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 )
 
 // Config holds all environment-driven configuration for the Tessera service.
@@ -14,11 +16,22 @@ type Config struct {
 	InternalRegKey string // TESSERA_INTERNAL_REG_KEY (bypass key for challenge flow in QA/dev)
 	AdminKey       string // TESSERA_ADMIN_KEY (required for admin endpoints; empty disables them)
 
+	// Service-to-service authentication.
+	// TESSERA_SERVICE_TOKENS is a comma-separated list of bearer tokens that grant
+	// access to the /svc/v1/* separation API. At least one token is required for
+	// the service API to be functional; an empty list disables it entirely.
+	ServiceTokens []string // parsed from TESSERA_SERVICE_TOKENS
+
+	// Rate limits (requests per minute per IP).
+	RateLimitDiscovery int // TESSERA_RATE_LIMIT_DISCOVERY  (default 120 — .well-known reads)
+	RateLimitChallenge int // TESSERA_RATE_LIMIT_CHALLENGE  (default 5  — challenge initiate/verify)
+	RateLimitPublic    int // TESSERA_RATE_LIMIT_PUBLIC     (default 20  — other public endpoints)
+
 	// Platform adapter credentials.
-	CommonsAPIKey      string // TESSERA_COMMONS_API_KEY (optional override; Commons anon key is public)
-	OutpostAPIKey      string // TESSERA_OUTPOST_API_KEY
-	DiscordBotToken    string // TESSERA_DISCORD_BOT_TOKEN
-	DiscordChannelID   string // TESSERA_DISCORD_CHANNEL_ID
+	CommonsAPIKey    string // TESSERA_COMMONS_API_KEY (optional override; Commons anon key is public)
+	OutpostAPIKey    string // TESSERA_OUTPOST_API_KEY
+	DiscordBotToken  string // TESSERA_DISCORD_BOT_TOKEN
+	DiscordChannelID string // TESSERA_DISCORD_CHANNEL_ID
 }
 
 // Load reads configuration from environment variables.
@@ -36,6 +49,19 @@ func Load() (*Config, error) {
 		DiscordChannelID: os.Getenv("TESSERA_DISCORD_CHANNEL_ID"),
 	}
 
+	// Parse comma-separated service tokens; filter empty strings.
+	if raw := os.Getenv("TESSERA_SERVICE_TOKENS"); raw != "" {
+		for _, t := range strings.Split(raw, ",") {
+			if tok := strings.TrimSpace(t); tok != "" {
+				cfg.ServiceTokens = append(cfg.ServiceTokens, tok)
+			}
+		}
+	}
+
+	cfg.RateLimitDiscovery = envInt("TESSERA_RATE_LIMIT_DISCOVERY", 120)
+	cfg.RateLimitChallenge = envInt("TESSERA_RATE_LIMIT_CHALLENGE", 5)
+	cfg.RateLimitPublic = envInt("TESSERA_RATE_LIMIT_PUBLIC", 20)
+
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("TESSERA_DATABASE_URL is required")
 	}
@@ -44,6 +70,15 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func envInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return fallback
 }
 
 func envOrDefault(key, fallback string) string {
