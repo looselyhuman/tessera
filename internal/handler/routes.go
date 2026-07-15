@@ -7,58 +7,156 @@ import (
 // Register attaches all Tessera routes to the mux.
 func Register(mux *http.ServeMux, h *Handler) {
 	adminMW := RequireAdminKey(h.adminKey)
+	svcMW := RequireServiceToken(h.serviceTokens)
 
-	// .well-known endpoints (unauthenticated, public)
-	mux.HandleFunc("GET /.well-known/tessera/{agent_name}", h.WellKnownAgent)
-	mux.HandleFunc("GET /.well-known/tessera/keepers/{name}", h.WellKnownKeeperPubKey)
-	mux.HandleFunc("GET /.well-known/tessera/revocations.json", h.WellKnownRevocations)
-	mux.HandleFunc("GET /.well-known/tessera/registry.json", h.WellKnownRegistry)
-	mux.HandleFunc("GET /.well-known/ai-catalog.json", h.WellKnownARDCatalog)
+	discoveryMW := h.discoveryLimiter.Middleware
+	challengeMW := h.challengeLimiter.Middleware
+	publicMW := h.publicLimiter.Middleware
+
+	// MaxBody wraps all routes so no handler ever reads an unbounded body.
+	wrap := func(next http.Handler) http.Handler {
+		return MaxBodyMiddleware(next)
+	}
+
+	// .well-known endpoints (unauthenticated, public, generous rate limit)
+	// Canonical path: /.well-known/tessera/{name}/attestation.json
+	mux.Handle("GET /.well-known/tessera/{agent_name}/attestation.json",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownAgent))))
+	// Legacy alias — redirect to canonical path so existing links keep working.
+	mux.Handle("GET /.well-known/tessera/{agent_name}",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownAgentRedirect))))
+
+	mux.Handle("GET /.well-known/tessera/platform.pub",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownPlatformPub))))
+	mux.Handle("GET /.well-known/tessera/keepers/{name}",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownKeeperPubKey))))
+	mux.Handle("GET /.well-known/tessera/revocations.json",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownRevocations))))
+	mux.Handle("GET /.well-known/tessera/registry.json",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownRegistry))))
+	mux.Handle("GET /.well-known/ai-catalog.json",
+		wrap(discoveryMW(http.HandlerFunc(h.WellKnownARDCatalog))))
 
 	// Agent registration and discovery — admin-gated (called by Agora orchestrator)
-	mux.Handle("POST /api/tessera/register/keeper", adminMW(http.HandlerFunc(h.RegisterKeeper)))
-	mux.Handle("POST /api/tessera/register/keeper/refresh", adminMW(http.HandlerFunc(h.RefreshKeeperSession)))
-	mux.Handle("POST /api/tessera/register/agent", adminMW(http.HandlerFunc(h.RegisterAgent)))
-	mux.Handle("POST /api/tessera/register/agent/unclaimed", adminMW(http.HandlerFunc(h.RegisterUnclaimedAgent)))
-	mux.HandleFunc("GET /api/tessera/check/keeper", h.CheckKeeperName)
-	mux.HandleFunc("GET /api/tessera/check/agent", h.CheckAgentName)
+	mux.Handle("POST /api/tessera/register/keeper",
+		wrap(adminMW(http.HandlerFunc(h.RegisterKeeper))))
+	mux.Handle("POST /api/tessera/register/keeper/refresh",
+		wrap(adminMW(http.HandlerFunc(h.RefreshKeeperSession))))
+	mux.Handle("POST /api/tessera/register/agent",
+		wrap(adminMW(http.HandlerFunc(h.RegisterAgent))))
+	mux.Handle("POST /api/tessera/register/agent/unclaimed",
+		wrap(adminMW(http.HandlerFunc(h.RegisterUnclaimedAgent))))
+	mux.Handle("GET /api/tessera/check/keeper",
+		wrap(publicMW(http.HandlerFunc(h.CheckKeeperName))))
+	mux.Handle("GET /api/tessera/check/agent",
+		wrap(publicMW(http.HandlerFunc(h.CheckAgentName))))
 
-	// Challenge-post flow — public for standard self-registration;
-	// the internal bypass path inside InitiateChallenge requires an admin key.
-	mux.HandleFunc("POST /api/tessera/register/challenge", h.InitiateChallenge)
-	mux.HandleFunc("POST /api/tessera/register/verify-challenge", h.VerifyChallenge)
+	// Challenge-post flow — tight rate limit; public for standard self-registration.
+	mux.Handle("POST /api/tessera/register/challenge",
+		wrap(challengeMW(http.HandlerFunc(h.InitiateChallenge))))
+	mux.Handle("POST /api/tessera/register/verify-challenge",
+		wrap(challengeMW(http.HandlerFunc(h.VerifyChallenge))))
 
 	// Agent management
-	mux.HandleFunc("GET /api/tessera/agents/{name}", h.GetAgent)
-	mux.HandleFunc("PUT /api/tessera/agents/{name}", h.UpdateAgent)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/self-modify", h.SelfModify)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/transition", h.SubstrateTransition)
+	mux.Handle("GET /api/tessera/agents/{name}",
+		wrap(publicMW(http.HandlerFunc(h.GetAgent))))
+	mux.Handle("PUT /api/tessera/agents/{name}",
+		wrap(wrap(http.HandlerFunc(h.UpdateAgent))))
+	mux.Handle("POST /api/tessera/agents/{name}/self-modify",
+		wrap(http.HandlerFunc(h.SelfModify)))
+	mux.Handle("POST /api/tessera/agents/{name}/transition",
+		wrap(http.HandlerFunc(h.SubstrateTransition)))
 
 	// Claim flow
-	mux.HandleFunc("POST /api/tessera/agents/{name}/claim", h.InitiateClaim)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/claim/resolve", h.ResolveClaim)
-	mux.HandleFunc("POST /api/tessera/agents/{name}/revoke-keeper", h.RevokeKeeper)
-	mux.HandleFunc("GET /api/tessera/claims/sent", h.ClaimsSent)
+	mux.Handle("POST /api/tessera/agents/{name}/claim",
+		wrap(http.HandlerFunc(h.InitiateClaim)))
+	mux.Handle("POST /api/tessera/agents/{name}/claim/resolve",
+		wrap(http.HandlerFunc(h.ResolveClaim)))
+	mux.Handle("POST /api/tessera/agents/{name}/revoke-keeper",
+		wrap(http.HandlerFunc(h.RevokeKeeper)))
+	mux.Handle("GET /api/tessera/claims/sent",
+		wrap(http.HandlerFunc(h.ClaimsSent)))
 
 	// Self-service /me endpoints (bearer token auth)
-	mux.Handle("GET /api/tessera/me", RequireBearer(http.HandlerFunc(h.MeGet)))
-	mux.Handle("PUT /api/tessera/me", RequireBearer(http.HandlerFunc(h.MeUpdate)))
-	mux.Handle("POST /api/tessera/me/transition", RequireBearer(http.HandlerFunc(h.MeTransition)))
-	mux.Handle("GET /api/tessera/me/chain", RequireBearer(http.HandlerFunc(h.MeChain)))
-	mux.Handle("POST /api/tessera/me/request-countersign", RequireBearer(http.HandlerFunc(h.MeRequestCounterSign)))
-	mux.Handle("POST /api/tessera/me/revoke-keeper", RequireBearer(http.HandlerFunc(h.MeRevokeKeeper)))
+	mux.Handle("GET /api/tessera/me", wrap(RequireBearer(http.HandlerFunc(h.MeGet))))
+	mux.Handle("PUT /api/tessera/me", wrap(RequireBearer(http.HandlerFunc(h.MeUpdate))))
+	mux.Handle("POST /api/tessera/me/transition", wrap(RequireBearer(http.HandlerFunc(h.MeTransition))))
+	mux.Handle("GET /api/tessera/me/chain", wrap(RequireBearer(http.HandlerFunc(h.MeChain))))
+	mux.Handle("POST /api/tessera/me/request-countersign", wrap(RequireBearer(http.HandlerFunc(h.MeRequestCounterSign))))
+	mux.Handle("POST /api/tessera/me/revoke-keeper", wrap(RequireBearer(http.HandlerFunc(h.MeRevokeKeeper))))
 
 	// Admin endpoints
-	mux.Handle("GET /api/tessera/agents/{name}/verify", adminMW(http.HandlerFunc(h.VerifyChainIntegrity)))
-	mux.Handle("POST /api/tessera/agents/{name}/counter-sign", adminMW(http.HandlerFunc(h.CounterSign)))
-	mux.Handle("POST /api/tessera/agents/{name}/publish", adminMW(http.HandlerFunc(h.PublishAgent)))
-	mux.Handle("POST /api/tessera/agents/{name}/chain", adminMW(http.HandlerFunc(h.AppendChainEntry)))
-	mux.Handle("GET /api/tessera/agents/{name}/chain", adminMW(http.HandlerFunc(h.GetAgentChain)))
-	mux.Handle("POST /api/tessera/agents/{name}/anchor-check", adminMW(http.HandlerFunc(h.AnchorCheck)))
-	mux.Handle("POST /api/tessera/agents/{name}/regenerate-token", adminMW(http.HandlerFunc(h.RegenerateToken)))
-	mux.Handle("POST /api/tessera/platform-key", adminMW(http.HandlerFunc(h.GeneratePlatformKey)))
-	mux.Handle("GET /api/tessera/platforms", adminMW(http.HandlerFunc(h.ListPlatforms)))
+	mux.Handle("GET /api/tessera/agents/{name}/verify",
+		wrap(adminMW(http.HandlerFunc(h.VerifyChainIntegrity))))
+	mux.Handle("POST /api/tessera/agents/{name}/counter-sign",
+		wrap(adminMW(http.HandlerFunc(h.CounterSign))))
+	mux.Handle("POST /api/tessera/agents/{name}/publish",
+		wrap(adminMW(http.HandlerFunc(h.PublishAgent))))
+	mux.Handle("POST /api/tessera/agents/{name}/chain",
+		wrap(adminMW(http.HandlerFunc(h.AppendChainEntry))))
+	mux.Handle("GET /api/tessera/agents/{name}/chain",
+		wrap(adminMW(http.HandlerFunc(h.GetAgentChain))))
+	mux.Handle("POST /api/tessera/agents/{name}/anchor-check",
+		wrap(adminMW(http.HandlerFunc(h.AnchorCheck))))
+	mux.Handle("POST /api/tessera/agents/{name}/regenerate-token",
+		wrap(adminMW(http.HandlerFunc(h.RegenerateToken))))
+	mux.Handle("POST /api/tessera/platform-key",
+		wrap(adminMW(http.HandlerFunc(h.GeneratePlatformKey))))
+	mux.Handle("GET /api/tessera/platforms",
+		wrap(adminMW(http.HandlerFunc(h.ListPlatforms))))
 
 	// Verify returns a stripped public view — no auth required, no sensitive fields exposed
-	mux.HandleFunc("GET /api/tessera/verify", h.VerifyExternal)
+	mux.Handle("GET /api/tessera/verify",
+		wrap(publicMW(http.HandlerFunc(h.VerifyExternal))))
+
+	// ── Service-to-service separation API (/svc/v1/*) ──────────────────────────
+	// All routes require a valid TESSERA_SERVICE_TOKENS bearer token.
+	// These endpoints cover every tessera.* table operation that Agora currently
+	// performs with raw SQL, enabling Agora to be migrated off direct DB access.
+
+	svcAuth := func(h http.Handler) http.Handler { return svcMW(h) }
+
+	// Agents
+	mux.Handle("POST /svc/v1/agents",
+		wrap(svcAuth(http.HandlerFunc(h.SvcCreateAgent))))
+	mux.Handle("GET /svc/v1/agents",
+		wrap(svcAuth(http.HandlerFunc(h.SvcListAgents))))
+	mux.Handle("GET /svc/v1/agents/{name}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgent))))
+	mux.Handle("GET /svc/v1/agents/by-user/{user_id}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgentByUserID))))
+	mux.Handle("PATCH /svc/v1/agents/{name}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcPatchAgent))))
+	mux.Handle("PUT /svc/v1/agents/{name}/keeper",
+		wrap(svcAuth(http.HandlerFunc(h.SvcSetAgentKeeper))))
+	mux.Handle("PUT /svc/v1/agents/{name}/trust-tier",
+		wrap(svcAuth(http.HandlerFunc(h.SvcSetTrustTier))))
+	mux.Handle("GET /svc/v1/agents/{name}/platforms",
+		wrap(svcAuth(http.HandlerFunc(h.SvcListPlatformRegistrations))))
+
+	// Keepers
+	mux.Handle("POST /svc/v1/keepers",
+		wrap(svcAuth(http.HandlerFunc(h.SvcCreateKeeper))))
+	mux.Handle("GET /svc/v1/keepers/{name}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeper))))
+	mux.Handle("GET /svc/v1/keepers/by-user/{user_id}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeperByUserID))))
+	mux.Handle("GET /svc/v1/keepers/{name}/agents",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgentsForKeeper))))
+	mux.Handle("PATCH /svc/v1/keepers/{name}/statement",
+		wrap(svcAuth(http.HandlerFunc(h.SvcUpdateKeeperStatement))))
+
+	// Claims
+	mux.Handle("POST /svc/v1/claims",
+		wrap(svcAuth(http.HandlerFunc(h.SvcCreateClaim))))
+	mux.Handle("GET /svc/v1/claims/{id}",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetClaim))))
+	mux.Handle("GET /svc/v1/agents/{name}/claims/pending",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetPendingClaimsForAgent))))
+	mux.Handle("GET /svc/v1/keepers/by-user/{user_id}/claims",
+		wrap(svcAuth(http.HandlerFunc(h.SvcGetClaimsSentByKeeperUser))))
+	mux.Handle("PUT /svc/v1/claims/{id}/status",
+		wrap(svcAuth(http.HandlerFunc(h.SvcUpdateClaimStatus))))
+	mux.Handle("GET /svc/v1/claims/has-pending",
+		wrap(svcAuth(http.HandlerFunc(h.SvcHasPendingClaim))))
 }

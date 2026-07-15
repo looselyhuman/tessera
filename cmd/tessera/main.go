@@ -13,6 +13,7 @@ import (
 	"github.com/looselyhuman/tessera/config"
 	"github.com/looselyhuman/tessera/internal/handler"
 	"github.com/looselyhuman/tessera/internal/platform"
+	"github.com/looselyhuman/tessera/internal/ratelimit"
 	"github.com/looselyhuman/tessera/internal/service"
 	"github.com/looselyhuman/tessera/internal/store/postgres"
 )
@@ -81,7 +82,14 @@ func main() {
 
 	// Wire up HTTP handlers.
 	mux := http.NewServeMux()
-	h := handler.New(svc, cfg.AdminKey)
+	h := handler.New(handler.HandlerConfig{
+		Svc:              svc,
+		AdminKey:         cfg.AdminKey,
+		ServiceTokens:    cfg.ServiceTokens,
+		DiscoveryLimiter: ratelimit.New(cfg.RateLimitDiscovery),
+		ChallengeLimiter: ratelimit.New(cfg.RateLimitChallenge),
+		PublicLimiter:    ratelimit.New(cfg.RateLimitPublic),
+	})
 	handler.Register(mux, h)
 
 	// Session pruning goroutine — runs every 5 minutes.

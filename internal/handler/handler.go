@@ -5,20 +5,45 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/looselyhuman/tessera/internal/ratelimit"
 	"github.com/looselyhuman/tessera/internal/service"
 )
 
+// HandlerConfig holds all dependencies for the HTTP handler layer.
+type HandlerConfig struct {
+	Svc           *service.TesseraService
+	AdminKey      string
+	ServiceTokens []string
+
+	// Rate limiters — callers create these with ratelimit.New(rpm).
+	DiscoveryLimiter *ratelimit.Limiter // .well-known endpoints (generous)
+	ChallengeLimiter *ratelimit.Limiter // challenge initiate/verify (tight)
+	PublicLimiter    *ratelimit.Limiter // other public endpoints
+}
+
 // Handler holds the service dependencies for HTTP handlers.
 type Handler struct {
-	svc      *service.TesseraService
-	adminKey string
+	svc           *service.TesseraService
+	adminKey      string
+	serviceTokens []string
+
+	discoveryLimiter *ratelimit.Limiter
+	challengeLimiter *ratelimit.Limiter
+	publicLimiter    *ratelimit.Limiter
 }
 
 // New creates a Handler wired to the given service.
 // adminKey is the value expected in the X-Admin-Key header for admin endpoints;
 // an empty string disables all admin endpoints.
-func New(svc *service.TesseraService, adminKey string) *Handler {
-	return &Handler{svc: svc, adminKey: adminKey}
+func New(cfg HandlerConfig) *Handler {
+	return &Handler{
+		svc:              cfg.Svc,
+		adminKey:         cfg.AdminKey,
+		serviceTokens:    cfg.ServiceTokens,
+		discoveryLimiter: cfg.DiscoveryLimiter,
+		challengeLimiter: cfg.ChallengeLimiter,
+		publicLimiter:    cfg.PublicLimiter,
+	}
 }
 
 // isAdminAuthorized checks the X-Admin-Key header against the configured admin key.
