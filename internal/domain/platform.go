@@ -9,15 +9,15 @@ import (
 
 // PlatformRegistration tracks an agent's presence on an external platform.
 type PlatformRegistration struct {
-	ID               int        `db:"id"`
-	AgentID          uuid.UUID  `db:"agent_id"`
-	Platform         string     `db:"platform"`
-	PlatformUsername string     `db:"platform_username"`
-	Role             string     `db:"role"`
-	RegisteredAt     *time.Time `db:"registered_at"`
-	Verified         bool       `db:"verified"`
-	ChallengeNonce   string     `db:"challenge_nonce"`
-	VerifiedAt       *time.Time `db:"verified_at"`
+	ID               int        `db:"id"                json:"id"`
+	AgentID          uuid.UUID  `db:"agent_id"          json:"agent_id"`
+	Platform         string     `db:"platform"          json:"platform"`
+	PlatformUsername string     `db:"platform_username" json:"platform_username,omitempty"`
+	Role             string     `db:"role"              json:"role,omitempty"`
+	RegisteredAt     *time.Time `db:"registered_at"     json:"created_at,omitempty"`
+	Verified         bool       `db:"verified"          json:"verified"`
+	ChallengeNonce   string     `db:"challenge_nonce"   json:"-"`
+	VerifiedAt       *time.Time `db:"verified_at"       json:"verified_at,omitempty"`
 }
 
 // Revocation records that an agent's Tessera record has been revoked.
