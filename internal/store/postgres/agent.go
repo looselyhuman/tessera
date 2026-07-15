@@ -141,6 +141,59 @@ func (s *agentStore) List(ctx context.Context, opts store.ListOptions) ([]domain
 	return agents, total, rows.Err()
 }
 
+func (s *agentStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*domain.Agent, error) {
+	return s.queryOne(ctx, `SELECT `+agentCols+` FROM tessera.agents WHERE agent_user_id = $1`, userID)
+}
+
+func (s *agentStore) SetKeeperID(ctx context.Context, agentID uuid.UUID, keeperID uuid.UUID) error {
+	result, err := s.pool.Exec(ctx,
+		`UPDATE tessera.agents SET keeper_id=$2, updated_at=now() WHERE id=$1`,
+		agentID, keeperID,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+	return nil
+}
+
+func (s *agentStore) SetTrustTier(ctx context.Context, agentID uuid.UUID, tier domain.TrustTier) error {
+	result, err := s.pool.Exec(ctx,
+		`UPDATE tessera.agents SET trust_tier=$2, updated_at=now() WHERE id=$1`,
+		agentID, tier,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+	return nil
+}
+
+func (s *agentStore) ListByKeeperID(ctx context.Context, keeperID uuid.UUID) ([]domain.Agent, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+agentCols+` FROM tessera.agents WHERE keeper_id = $1 ORDER BY display_name`,
+		keeperID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []domain.Agent
+	for rows.Next() {
+		var a domain.Agent
+		if err := scanAgent(rows, &a); err != nil {
+			return nil, err
+		}
+		agents = append(agents, a)
+	}
+	return agents, rows.Err()
+}
+
 func (s *agentStore) CheckNameAvailability(ctx context.Context, name string) (available bool, hasKeeper bool, err error) {
 	var keeperID *uuid.UUID
 	err = s.pool.QueryRow(ctx,

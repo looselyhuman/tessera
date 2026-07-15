@@ -84,6 +84,14 @@ func (s *keeperStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*domai
 	return s.query(ctx, `SELECT id, keeper_name, display_name, email_hash, public_key, keeper_statement, user_id, created_at FROM tessera.keepers WHERE user_id=$1`, userID)
 }
 
+func (s *keeperStore) UpdateStatement(ctx context.Context, keeperID uuid.UUID, statement *string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE tessera.keepers SET keeper_statement=$2 WHERE id=$1`,
+		keeperID, statement,
+	)
+	return err
+}
+
 func (s *keeperStore) CheckNameAvailability(ctx context.Context, name string) (bool, error) {
 	var count int
 	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM tessera.keepers WHERE keeper_name=$1`, name).Scan(&count)

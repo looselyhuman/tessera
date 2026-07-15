@@ -38,6 +38,17 @@ func (s *claimStore) GetSentByKeeper(ctx context.Context, keeperID uuid.UUID) ([
 	return s.queryMany(ctx, `SELECT id, keeper_id, agent_name, agent_id, keeper_statement, status, created_at, resolved_at FROM tessera.claim_requests WHERE keeper_id=$1 ORDER BY created_at DESC`, keeperID)
 }
 
+func (s *claimStore) HasPendingClaim(ctx context.Context, agentID uuid.UUID, keeperID uuid.UUID) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM tessera.claim_requests
+			WHERE agent_id=$1 AND keeper_id=$2 AND status='pending'
+		)`, agentID, keeperID,
+	).Scan(&exists)
+	return exists, err
+}
+
 func (s *claimStore) Resolve(ctx context.Context, id uuid.UUID, status domain.ClaimStatus) error {
 	now := time.Now()
 	_, err := s.pool.Exec(ctx,
