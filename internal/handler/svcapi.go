@@ -8,6 +8,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -242,7 +243,12 @@ func (h *Handler) SvcGetKeeper(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	keeper, err := h.svc.SvcGetKeeper(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "keeper not found")
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "keeper not found")
+		} else {
+			slog.Error("SvcGetKeeper", "name", name, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, keeper)
@@ -257,7 +263,12 @@ func (h *Handler) SvcGetKeeperByID(w http.ResponseWriter, r *http.Request) {
 	}
 	keeper, err := h.svc.SvcGetKeeperByID(r.Context(), keeperID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "keeper not found")
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "keeper not found")
+		} else {
+			slog.Error("SvcGetKeeperByID", "id", keeperID, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, keeper)
@@ -272,7 +283,12 @@ func (h *Handler) SvcGetKeeperByUserID(w http.ResponseWriter, r *http.Request) {
 	}
 	keeper, err := h.svc.SvcGetKeeperByUserID(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "keeper not found")
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "keeper not found")
+		} else {
+			slog.Error("SvcGetKeeperByUserID", "user_id", userID, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, keeper)
