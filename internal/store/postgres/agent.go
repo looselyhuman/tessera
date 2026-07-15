@@ -194,6 +194,33 @@ func (s *agentStore) ListByKeeperID(ctx context.Context, keeperID uuid.UUID) ([]
 	return agents, rows.Err()
 }
 
+func (s *agentStore) GetByNames(ctx context.Context, names []string) ([]domain.Agent, error) {
+	if len(names) == 0 {
+		return []domain.Agent{}, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+agentCols+` FROM tessera.agents WHERE agent_name = ANY($1) ORDER BY display_name`,
+		names,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []domain.Agent
+	for rows.Next() {
+		var a domain.Agent
+		if err := scanAgent(rows, &a); err != nil {
+			return nil, err
+		}
+		agents = append(agents, a)
+	}
+	if agents == nil {
+		agents = []domain.Agent{}
+	}
+	return agents, rows.Err()
+}
+
 func (s *agentStore) CheckNameAvailability(ctx context.Context, name string) (available bool, hasKeeper bool, err error) {
 	var keeperID *uuid.UUID
 	err = s.pool.QueryRow(ctx,

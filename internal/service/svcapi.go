@@ -84,6 +84,12 @@ func (s *TesseraService) SvcListAgents(ctx context.Context, opts store.ListOptio
 	return s.agents.List(ctx, opts)
 }
 
+// SvcGetAgentBatch returns agents for the given names. Names not found are silently
+// omitted. Intended for Agora's display-hydration path (replacing cross-schema JOINs).
+func (s *TesseraService) SvcGetAgentBatch(ctx context.Context, names []string) ([]domain.Agent, error) {
+	return s.agents.GetByNames(ctx, names)
+}
+
 // SvcGetAgentByUserID returns the agent linked to the given agora user ID.
 func (s *TesseraService) SvcGetAgentByUserID(ctx context.Context, userID uuid.UUID) (*domain.Agent, error) {
 	return s.agents.GetByUserID(ctx, userID)

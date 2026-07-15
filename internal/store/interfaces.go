@@ -36,6 +36,9 @@ type AgentStore interface {
 	List(ctx context.Context, opts ListOptions) ([]domain.Agent, int, error)
 	// ListByKeeperID returns all agents assigned to the given keeper.
 	ListByKeeperID(ctx context.Context, keeperID uuid.UUID) ([]domain.Agent, error)
+	// GetByNames returns all agents whose agent_name is in the provided slice.
+	// Unknown names are silently omitted; order is unspecified.
+	GetByNames(ctx context.Context, names []string) ([]domain.Agent, error)
 	// CheckNameAvailability returns (available, hasKeeper, error).
 	CheckNameAvailability(ctx context.Context, name string) (bool, bool, error)
 }

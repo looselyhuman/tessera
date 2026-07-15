@@ -10,12 +10,25 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/service"
 	"github.com/looselyhuman/tessera/internal/store"
 )
+
+// splitNames splits a comma-separated names string, trims whitespace, and drops empty entries.
+func splitNames(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 // ── Agents ────────────────────────────────────────────────────────────────
 
@@ -35,6 +48,25 @@ func (h *Handler) SvcCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, agent)
+}
+
+func (h *Handler) SvcGetAgentBatch(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("names")
+	if raw == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"agents": []domain.Agent{}})
+		return
+	}
+	names := splitNames(raw)
+	if len(names) > 200 {
+		writeError(w, http.StatusBadRequest, "names must not exceed 200 entries")
+		return
+	}
+	agents, err := h.svc.SvcGetAgentBatch(r.Context(), names)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"agents": agents})
 }
 
 func (h *Handler) SvcListAgents(w http.ResponseWriter, r *http.Request) {
