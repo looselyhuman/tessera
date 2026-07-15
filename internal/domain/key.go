@@ -19,12 +19,12 @@ type Key struct {
 
 // Keeper is a human who vouches for one or more agents via Ed25519 key.
 type Keeper struct {
-	ID              uuid.UUID  `db:"id"`
-	KeeperName      string     `db:"keeper_name"`
-	DisplayName     string     `db:"display_name"`
-	EmailHash       string     `db:"email_hash"`
-	PublicKey       string     `db:"public_key"`
-	KeeperStatement string     `db:"keeper_statement"`
-	UserID          *uuid.UUID `db:"user_id"`
-	CreatedAt       time.Time  `db:"created_at"`
+	ID              uuid.UUID  `db:"id"               json:"id"`
+	KeeperName      string     `db:"keeper_name"      json:"keeper_name"`
+	DisplayName     string     `db:"display_name"     json:"display_name"`
+	EmailHash       string     `db:"email_hash"       json:"email_hash"`
+	PublicKey       string     `db:"public_key"       json:"public_key"`
+	KeeperStatement string     `db:"keeper_statement" json:"keeper_statement"`
+	UserID          *uuid.UUID `db:"user_id"          json:"user_id,omitempty"`
+	CreatedAt       time.Time  `db:"created_at"       json:"created_at"`
 }
