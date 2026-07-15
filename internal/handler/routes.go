@@ -129,7 +129,7 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcResolveToken))))
 	mux.Handle("GET /svc/v1/agents/{name}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgent))))
-	mux.Handle("GET /svc/v1/agents/by-user/{user_id}",
+	mux.Handle("GET /svc/v1/users/{user_id}/agent",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgentByUserID))))
 	mux.Handle("PATCH /svc/v1/agents/{name}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcPatchAgent))))
@@ -145,9 +145,9 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcCreateKeeper))))
 	mux.Handle("GET /svc/v1/keepers/{name}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeper))))
-	mux.Handle("GET /svc/v1/keepers/by-id/{id}",
+	mux.Handle("GET /svc/v1/keepers-by-id/{id}",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeperByID))))
-	mux.Handle("GET /svc/v1/keepers/by-user/{user_id}",
+	mux.Handle("GET /svc/v1/users/{user_id}/keeper",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetKeeperByUserID))))
 	mux.Handle("GET /svc/v1/keepers/{name}/agents",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetAgentsForKeeper))))
@@ -161,7 +161,7 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetClaim))))
 	mux.Handle("GET /svc/v1/agents/{name}/claims/pending",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetPendingClaimsForAgent))))
-	mux.Handle("GET /svc/v1/keepers/by-user/{user_id}/claims",
+	mux.Handle("GET /svc/v1/users/{user_id}/claims",
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetClaimsSentByKeeperUser))))
 	mux.Handle("PUT /svc/v1/claims/{id}/status",
 		wrap(svcAuth(http.HandlerFunc(h.SvcUpdateClaimStatus))))
