@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/looselyhuman/tessera/internal/domain"
@@ -50,7 +51,8 @@ func (h *Handler) MeUpdate(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.svc.UpdateAgentProfile(r.Context(), agent.ID, body.Bio, body.DisplayName)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		slog.Error("MeUpdate", "agent_id", agent.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, updated)
@@ -79,7 +81,8 @@ func (h *Handler) MeTransition(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.LogSelfSubstrateTransition(r.Context(), agent.ID, body.FromModel, body.ToModel, body.Reason); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		slog.Error("MeTransition", "agent_id", agent.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"status": "recorded"})
@@ -95,7 +98,8 @@ func (h *Handler) MeChain(w http.ResponseWriter, r *http.Request) {
 
 	chain, err := h.svc.GetAttestationChain(r.Context(), agent.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		slog.Error("MeChain", "agent_id", agent.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if chain == nil {
@@ -122,7 +126,8 @@ func (h *Handler) MeRequestCounterSign(w http.ResponseWriter, r *http.Request) {
 
 	req, err := h.svc.RequestCounterSign(r.Context(), agent.ID, body.Message)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		slog.Error("MeRequestCounterSign", "agent_id", agent.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)
@@ -137,7 +142,8 @@ func (h *Handler) MeRevokeKeeper(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.SelfRevokeKeeper(r.Context(), agent.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		slog.Error("MeRevokeKeeper", "agent_id", agent.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "keeper_revoked"})
