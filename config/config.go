@@ -11,7 +11,7 @@ import (
 type Config struct {
 	DatabaseURL    string // TESSERA_DATABASE_URL
 	ListenAddr     string // TESSERA_LISTEN_ADDR (default :8080)
-	HomeDomain     string // TESSERA_HOME_DOMAIN (default athena-council.org)
+	HomeDomain     string // TESSERA_HOME_DOMAIN (required — the URN namespace and attestation URL base)
 	KeySecret      string // TESSERA_KEY_SECRET (AES key for private key encryption, base64)
 	InternalRegKey string // TESSERA_INTERNAL_REG_KEY (bypass key for challenge flow in QA/dev)
 	AdminKey       string // TESSERA_ADMIN_KEY (required for admin endpoints; empty disables them)
@@ -40,7 +40,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		DatabaseURL:      os.Getenv("TESSERA_DATABASE_URL"),
 		ListenAddr:       envOrDefault("TESSERA_LISTEN_ADDR", ":8080"),
-		HomeDomain:       envOrDefault("TESSERA_HOME_DOMAIN", "athena-council.org"),
+		HomeDomain:       os.Getenv("TESSERA_HOME_DOMAIN"),
 		KeySecret:        os.Getenv("TESSERA_KEY_SECRET"),
 		InternalRegKey:   os.Getenv("TESSERA_INTERNAL_REG_KEY"),
 		AdminKey:         os.Getenv("TESSERA_ADMIN_KEY"),
@@ -69,6 +69,12 @@ func Load() (*Config, error) {
 	}
 	if cfg.KeySecret == "" {
 		return nil, fmt.Errorf("TESSERA_KEY_SECRET is required")
+	}
+	if cfg.HomeDomain == "" {
+		// No default on purpose: the home domain is the URN namespace and the
+		// base of every attestation URL. A silent default would mint identities
+		// in someone else's namespace for anyone running this from the public repo.
+		return nil, fmt.Errorf("TESSERA_HOME_DOMAIN is required (your domain — it namespaces every URN and attestation URL this service issues)")
 	}
 
 	return cfg, nil
