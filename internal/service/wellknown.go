@@ -195,11 +195,15 @@ func (s *TesseraService) WellKnownAgent(ctx context.Context, name string) (json.
 		sigPayload["keeper_email_hash"] = keeperBlock["email_hash"]
 		sigPayload["keeper_public_key_uri"] = keeperBlock["public_key_uri"]
 	}
-	canonical, _ := tessera_crypto.Canonicalize(sigPayload)
+	canonical, canonErr := tessera_crypto.Canonicalize(sigPayload)
 
 	// ── Signature block ───────────────────────────────────────────────────────
+	// If canonicalization failed, skip signing entirely — a signature over nil/empty
+	// bytes would be valid-looking but meaningless and would mislead verifiers.
 	var sigBlock map[string]any
-	if keeperPrivB64 != "" {
+	if canonErr != nil {
+		slog.Warn("wellknown: canonicalize failed — skipping signature", "agent", name, "error", canonErr)
+	} else if keeperPrivB64 != "" {
 		if sig, err := tessera_crypto.Sign(keeperPrivB64, canonical); err != nil {
 			slog.Warn("wellknown: keeper sign failed", "agent", name, "error", err)
 		} else {
@@ -212,7 +216,8 @@ func (s *TesseraService) WellKnownAgent(ctx context.Context, name string) (json.
 		}
 	}
 	// Fallback: try platform key when keeper key is unavailable.
-	if sigBlock == nil {
+	// Guard on canonErr so we never sign garbage bytes via the fallback path either.
+	if sigBlock == nil && canonErr == nil {
 		if platKey, err := s.keys.GetByTypeAndName(ctx, domain.KeyTypePlatform, "platform"); err == nil {
 			if encRaw, err := base64.StdEncoding.DecodeString(platKey.EncryptedPrivateKey); err == nil {
 				if privBytes, err := tessera_crypto.Decrypt(encRaw, s.encryptionKey); err == nil {

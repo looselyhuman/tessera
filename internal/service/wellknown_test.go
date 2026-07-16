@@ -499,6 +499,50 @@ func TestSvcVouchAgentTierUpgradeAtThreshold(t *testing.T) {
 	}
 }
 
+// TestWellKnownAgentNilSignatureWhenNoKey verifies that when no signing key is
+// available the document is returned without a signature block (null/absent),
+// rather than with a garbage signature. This is the same output shape that the
+// canonErr guard in WellKnownAgent produces when Canonicalize fails — both
+// paths leave sigBlock nil and the document ships unsigned. The guard was added
+// to prevent Sign being called with nil/empty bytes, which would produce a
+// valid-looking Ed25519 signature over no content.
+func TestWellKnownAgentNilSignatureWhenNoKey(t *testing.T) {
+	agent := &domain.Agent{
+		ID:          uuid.New(),
+		AgentName:   "nokeyagent",
+		AgentURN:    "urn:tessera:test.example.org:nokeyagent",
+		DisplayName: "No Key Agent",
+		Published:   true,
+		TrustTier:   domain.TrustSelfAttested,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		// No KeeperID — no keeper to look up, no keeper key, no platform key.
+	}
+	svc := buildTestService(
+		newFakeAgentStore(agent),
+		newFakeKeeperStore(),
+		newFakeKeyStore(), // empty — no platform key either
+		&fakeChainStore{},
+		&fakeTransitionStore{},
+	)
+
+	raw, err := svc.WellKnownAgent(context.Background(), "nokeyagent")
+	if err != nil {
+		t.Fatalf("WellKnownAgent: %v", err)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// signature must be null, not a populated object with a value over empty bytes.
+	sig := doc["signature"]
+	if sig != nil {
+		t.Errorf("expected nil signature when no key available, got: %v", sig)
+	}
+}
+
 // TestSvcVouchAgentRequiresVoucher verifies empty voucher is rejected.
 func TestSvcVouchAgentRequiresVoucher(t *testing.T) {
 	agent := &domain.Agent{
