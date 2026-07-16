@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -111,20 +112,25 @@ func (s *TesseraService) CounterSign(ctx context.Context, agentName, signature s
 		return nil, fmt.Errorf("signature is required for counter-sign")
 	}
 
+	// sigData is what the counter-signature covers; the chain entry stores its
+	// canonical form so VerifyChainIntegrity can re-check the signature later.
+	sigData := map[string]any{
+		"agent_id":   agent.ID.String(),
+		"agent_name": agent.AgentName,
+		"agent_urn":  agent.AgentURN,
+	}
+	if agent.KeeperID != nil {
+		sigData["keeper_id"] = agent.KeeperID.String()
+	}
+	canonical, err := tessera_crypto.Canonicalize(sigData)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalize counter-sign data: %w", err)
+	}
+
 	if agent.KeeperID != nil {
 		keeper, err := s.keepers.GetByID(ctx, *agent.KeeperID)
 		if err != nil {
 			return nil, fmt.Errorf("get keeper for counter-sign verification: %w", err)
-		}
-		sigData := map[string]any{
-			"agent_id":   agent.ID.String(),
-			"agent_name": agent.AgentName,
-			"agent_urn":  agent.AgentURN,
-			"keeper_id":  agent.KeeperID.String(),
-		}
-		canonical, err := tessera_crypto.Canonicalize(sigData)
-		if err != nil {
-			return nil, fmt.Errorf("canonicalize counter-sign data: %w", err)
 		}
 		ok, err := tessera_crypto.Verify(keeper.PublicKey, canonical, signature)
 		if err != nil {
@@ -146,12 +152,11 @@ func (s *TesseraService) CounterSign(ctx context.Context, agentName, signature s
 	if agent.KeeperID != nil {
 		attester = fmt.Sprintf("keeper:%s", agent.KeeperID.String())
 	}
-	payload, _ := json.Marshal(map[string]string{"signature": signature})
 	entry := &domain.AttestationEntry{
 		AgentID:   agent.ID,
 		EntryType: domain.EntryCounterSigned,
 		Attester:  attester,
-		Payload:   payload,
+		Payload:   json.RawMessage(canonical),
 		Signature: signature,
 		CreatedAt: time.Now(),
 	}
@@ -220,7 +225,14 @@ func (s *TesseraService) VerifyExternal(ctx context.Context, urn string) (*domai
 
 // AdminGeneratePlatformKey generates an Ed25519 keypair for a named platform integration.
 // The private key is stored AES-256-GCM encrypted; only the public key is returned.
+// The canonical name is "platform" — the well-known reader and WellKnownAgent both
+// look up the key under that name. Any other name is accepted but logged as a warning
+// since it will not be found by the standard lookup path.
 func (s *TesseraService) AdminGeneratePlatformKey(ctx context.Context, platformName string) (string, error) {
+	if platformName != "platform" {
+		slog.Warn("platform key generated with non-canonical name — well-known endpoints use 'platform'",
+			"name", platformName)
+	}
 	pubB64, privB64, err := tessera_crypto.GenerateKeypair()
 	if err != nil {
 		return "", fmt.Errorf("generate platform keypair: %w", err)

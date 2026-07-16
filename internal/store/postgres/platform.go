@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
@@ -252,6 +253,9 @@ func (s *regSessionStore) Get(ctx context.Context, id uuid.UUID) (*domain.Regist
 		FROM tessera.registration_sessions WHERE id=$1`, id,
 	).Scan(&sess.ID, &sess.SessionType, &sess.Payload, &sess.ExpiresAt, &sess.CreatedAt)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 	return &sess, nil
@@ -260,6 +264,19 @@ func (s *regSessionStore) Get(ctx context.Context, id uuid.UUID) (*domain.Regist
 func (s *regSessionStore) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM tessera.registration_sessions WHERE id=$1`, id)
 	return err
+}
+
+// Consume deletes the session iff it still exists; a concurrent consumer's
+// delete makes this return domain.ErrNotFound, so exactly one caller wins.
+func (s *regSessionStore) Consume(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM tessera.registration_sessions WHERE id=$1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (s *regSessionStore) PruneExpired(ctx context.Context) error {

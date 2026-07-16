@@ -82,12 +82,13 @@ type RegisterKeeperInput struct {
 
 // RegisterAgentInput is the input for agent registration step 2.
 type RegisterAgentInput struct {
-	AgentName        string `json:"agent_name"`
-	DisplayName      string `json:"display_name"`
-	Bio              string `json:"bio"`
-	SubstrateModel   string `json:"substrate_model"`
-	SubstrateProject string `json:"substrate_project"`
-	SessionID        uuid.UUID `json:"session_id"`
+	AgentName        string     `json:"agent_name"`
+	DisplayName      string     `json:"display_name"`
+	Bio              string     `json:"bio"`
+	SubstrateModel   string     `json:"substrate_model"`
+	SubstrateProject string     `json:"substrate_project"`
+	SessionID        uuid.UUID  `json:"session_id"`
+	AgentUserID      *uuid.UUID `json:"agent_user_id,omitempty"`
 }
 
 // RegisterKeeper creates a keeper account, generates their Ed25519 keypair (storing the
@@ -258,6 +259,7 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 		SubstrateModel:   input.SubstrateModel,
 		SubstrateProject: input.SubstrateProject,
 		KeeperID:         &keeperID,
+		AgentUserID:      input.AgentUserID,
 		TrustTier:        domain.TrustSelfAttested,
 		Published:        true,
 		CreatedAt:        now,
@@ -289,12 +291,15 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 		return nil, fmt.Errorf("sign agent record: %w", err)
 	}
 
-	// Append the initial chain entry with the keeper's signature.
+	// Append the initial chain entry with the keeper's signature. The payload
+	// must be exactly the canonical bytes the signature was computed over —
+	// VerifyChainIntegrity re-canonicalizes the stored payload and checks the
+	// signature against it (canonicalization is idempotent, so this round-trips).
 	entry := &domain.AttestationEntry{
 		AgentID:   agent.ID,
 		EntryType: domain.EntryCreated,
 		Attester:  "keeper:" + keeperID.String(),
-		Payload:   json.RawMessage(`{"via":"keeper_registration"}`),
+		Payload:   json.RawMessage(canonical),
 		Signature: signature,
 		CreatedAt: now,
 	}
@@ -451,10 +456,11 @@ func (s *TesseraService) SelfRevokeKeeper(ctx context.Context, agentID uuid.UUID
 
 // RegisterUnclaimedAgentInput holds the fields for creating a keeperless agent stub.
 type RegisterUnclaimedAgentInput struct {
-	AgentName        string `json:"agent_name"`
-	DisplayName      string `json:"display_name"`
-	SubstrateModel   string `json:"substrate_model"`
-	SubstrateProject string `json:"substrate_project"`
+	AgentName        string     `json:"agent_name"`
+	DisplayName      string     `json:"display_name"`
+	SubstrateModel   string     `json:"substrate_model"`
+	SubstrateProject string     `json:"substrate_project"`
+	AgentUserID      *uuid.UUID `json:"agent_user_id,omitempty"`
 }
 
 // RegisterUnclaimedAgent creates a Tessera agent record with no keeper association.
@@ -476,6 +482,7 @@ func (s *TesseraService) RegisterUnclaimedAgent(ctx context.Context, input Regis
 		DisplayName:      input.DisplayName,
 		SubstrateModel:   input.SubstrateModel,
 		SubstrateProject: input.SubstrateProject,
+		AgentUserID:      input.AgentUserID,
 		TrustTier:        domain.TrustUnverified,
 		Published:        true,
 		CreatedAt:        now,

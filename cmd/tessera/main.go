@@ -13,6 +13,7 @@ import (
 	"github.com/looselyhuman/tessera/config"
 	"github.com/looselyhuman/tessera/internal/handler"
 	"github.com/looselyhuman/tessera/internal/platform"
+	"github.com/looselyhuman/tessera/internal/ratelimit"
 	"github.com/looselyhuman/tessera/internal/service"
 	"github.com/looselyhuman/tessera/internal/store/postgres"
 )
@@ -52,10 +53,17 @@ func main() {
 	modifications := postgres.NewModificationRequestStore(pool)
 	sessions := postgres.NewRegistrationSessionStore(pool)
 
-	// Wire up platform adapters.
+	// Wire up platform adapters. Canonical keys are the short platform names —
+	// they are what /join, the docs, and the Python production flow send, and
+	// what challenge sessions store. Domain aliases kept for any callers that
+	// pass the host name instead.
+	commonsAdapter := platform.NewCommonsAdapter()
+	outpostAdapter := platform.NewOutpostAdapter()
 	adapters := map[string]platform.Adapter{
-		"jointhecommons.space": platform.NewCommonsAdapter(),
-		"joinoutpost.ai":       platform.NewOutpostAdapter(),
+		"commons":              commonsAdapter,
+		"outpost":              outpostAdapter,
+		"jointhecommons.space": commonsAdapter,
+		"joinoutpost.ai":       outpostAdapter,
 	}
 	if cfg.DiscordBotToken != "" && cfg.DiscordChannelID != "" {
 		adapters["discord"] = platform.NewDiscordAdapter(cfg.DiscordBotToken, cfg.DiscordChannelID)
@@ -81,7 +89,15 @@ func main() {
 
 	// Wire up HTTP handlers.
 	mux := http.NewServeMux()
-	h := handler.New(svc, cfg.AdminKey)
+	h := handler.New(handler.HandlerConfig{
+		Svc:              svc,
+		AdminKey:         cfg.AdminKey,
+		ServiceTokens:    cfg.ServiceTokens,
+		DiscoveryLimiter:       ratelimit.New(cfg.RateLimitDiscovery),
+		ChallengeLimiter:       ratelimit.New(cfg.RateLimitChallenge),
+		ChallengeVerifyLimiter: ratelimit.New(cfg.RateLimitChallengeVerify),
+		PublicLimiter:          ratelimit.New(cfg.RateLimitPublic),
+	})
 	handler.Register(mux, h)
 
 	// Session pruning goroutine — runs every 5 minutes.
@@ -97,7 +113,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
-		Handler:      mux,
+		Handler:      handler.SecurityHeaders(mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,

@@ -2,9 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/service"
 )
 
@@ -109,7 +112,12 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	nonce, sessionID, err := h.svc.InitiateChallenge(r.Context(), input)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, service.ErrUnsupportedPlatform) {
+			writeError(w, http.StatusBadRequest, "unsupported platform — use \"commons\" or \"outpost\"")
+			return
+		}
+		slog.Error("InitiateChallenge", "platform", input.Platform, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	platform := input.Platform
@@ -120,8 +128,8 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 		"nonce":              nonce,
 		"session_id":         sessionID,
 		"platform":           platform,
-		"expires_in_seconds": 600,
-		"instructions":       "Post a message containing 'tessera-verify-" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id.",
+		"expires_in_seconds": 1800,
+		"instructions":       "Post a message containing '" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id.",
 	})
 }
 
@@ -133,7 +141,23 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, token, err := h.svc.VerifyChallenge(r.Context(), input)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, service.ErrNonceNotFound) {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"verified": false,
+				"message":  "Nonce not found yet. Try again in a moment.",
+			})
+			return
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Session not found or expired. Please restart registration.")
+			return
+		}
+		if errors.Is(err, service.ErrUnsupportedPlatform) {
+			writeError(w, http.StatusBadRequest, "unsupported platform — use \"commons\" or \"outpost\"")
+			return
+		}
+		slog.Error("VerifyChallenge", "session_id", input.SessionID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{

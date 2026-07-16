@@ -33,6 +33,7 @@ const (
 	EntryCitizenshipAccepted  EntryType = "citizenship_accepted"
 	EntryAgentSelfModified    EntryType = "agent_self_modified"
 	EntryCommunityVerified    EntryType = "community_verified"
+	EntryVouchReceived        EntryType = "vouch_received"
 )
 
 // ClaimStatus is the lifecycle state of a claim request.

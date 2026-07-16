@@ -44,6 +44,20 @@ func TestCanonicalizeKeyOrder(t *testing.T) {
 	}
 }
 
+// TestCanonicalizeErrorOnNonSerializable confirms Canonicalize returns an error
+// for types that json.Marshal cannot handle. This is the error class that
+// WellKnownAgent's canonErr guard protects against: when Canonicalize fails,
+// signing is skipped entirely rather than producing a signature over nil bytes.
+func TestCanonicalizeErrorOnNonSerializable(t *testing.T) {
+	badInput := map[string]any{
+		"channel": make(chan int), // json.Marshal cannot serialize channels
+	}
+	_, err := Canonicalize(badInput)
+	if err == nil {
+		t.Fatal("expected error for non-serializable input, got nil")
+	}
+}
+
 func TestCanonicalizeNestedKeyOrder(t *testing.T) {
 	input := map[string]any{
 		"outer": map[string]any{"z": 9, "a": 1},

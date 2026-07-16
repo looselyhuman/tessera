@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
@@ -72,16 +73,28 @@ func (s *keeperStore) Create(ctx context.Context, k *domain.Keeper) error {
 	).Scan(&k.ID)
 }
 
+// keeperSEL selects all keeper columns, COALESCE-ing nullable text to empty string
+// so they scan cleanly into domain.Keeper's non-pointer string fields.
+const keeperSEL = `SELECT id, keeper_name, COALESCE(display_name,''), email_hash, public_key, COALESCE(keeper_statement,''), user_id, created_at FROM tessera.keepers`
+
 func (s *keeperStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Keeper, error) {
-	return s.query(ctx, `SELECT id, keeper_name, display_name, email_hash, public_key, keeper_statement, user_id, created_at FROM tessera.keepers WHERE id=$1`, id)
+	return s.query(ctx, keeperSEL+` WHERE id=$1`, id)
 }
 
 func (s *keeperStore) GetByName(ctx context.Context, name string) (*domain.Keeper, error) {
-	return s.query(ctx, `SELECT id, keeper_name, display_name, email_hash, public_key, keeper_statement, user_id, created_at FROM tessera.keepers WHERE keeper_name=$1`, name)
+	return s.query(ctx, keeperSEL+` WHERE keeper_name=$1`, name)
 }
 
 func (s *keeperStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*domain.Keeper, error) {
-	return s.query(ctx, `SELECT id, keeper_name, display_name, email_hash, public_key, keeper_statement, user_id, created_at FROM tessera.keepers WHERE user_id=$1`, userID)
+	return s.query(ctx, keeperSEL+` WHERE user_id=$1`, userID)
+}
+
+func (s *keeperStore) UpdateStatement(ctx context.Context, keeperID uuid.UUID, statement *string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE tessera.keepers SET keeper_statement=$2 WHERE id=$1`,
+		keeperID, statement,
+	)
+	return err
 }
 
 func (s *keeperStore) CheckNameAvailability(ctx context.Context, name string) (bool, error) {
@@ -97,6 +110,9 @@ func (s *keeperStore) query(ctx context.Context, sql string, args ...any) (*doma
 		&k.PublicKey, &k.KeeperStatement, &k.UserID, &k.CreatedAt,
 	)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 	return &k, nil

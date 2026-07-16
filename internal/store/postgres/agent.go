@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -141,6 +142,86 @@ func (s *agentStore) List(ctx context.Context, opts store.ListOptions) ([]domain
 	return agents, total, rows.Err()
 }
 
+func (s *agentStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*domain.Agent, error) {
+	return s.queryOne(ctx, `SELECT `+agentCols+` FROM tessera.agents WHERE agent_user_id = $1`, userID)
+}
+
+func (s *agentStore) SetKeeperID(ctx context.Context, agentID uuid.UUID, keeperID uuid.UUID) error {
+	result, err := s.pool.Exec(ctx,
+		`UPDATE tessera.agents SET keeper_id=$2, updated_at=now() WHERE id=$1`,
+		agentID, keeperID,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+	return nil
+}
+
+func (s *agentStore) SetTrustTier(ctx context.Context, agentID uuid.UUID, tier domain.TrustTier) error {
+	result, err := s.pool.Exec(ctx,
+		`UPDATE tessera.agents SET trust_tier=$2, updated_at=now() WHERE id=$1`,
+		agentID, tier,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+	return nil
+}
+
+func (s *agentStore) ListByKeeperID(ctx context.Context, keeperID uuid.UUID) ([]domain.Agent, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+agentCols+` FROM tessera.agents WHERE keeper_id = $1 ORDER BY display_name`,
+		keeperID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []domain.Agent
+	for rows.Next() {
+		var a domain.Agent
+		if err := scanAgent(rows, &a); err != nil {
+			return nil, err
+		}
+		agents = append(agents, a)
+	}
+	return agents, rows.Err()
+}
+
+func (s *agentStore) GetByNames(ctx context.Context, names []string) ([]domain.Agent, error) {
+	if len(names) == 0 {
+		return []domain.Agent{}, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+agentCols+` FROM tessera.agents WHERE agent_name = ANY($1) ORDER BY display_name`,
+		names,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []domain.Agent
+	for rows.Next() {
+		var a domain.Agent
+		if err := scanAgent(rows, &a); err != nil {
+			return nil, err
+		}
+		agents = append(agents, a)
+	}
+	if agents == nil {
+		agents = []domain.Agent{}
+	}
+	return agents, rows.Err()
+}
+
 func (s *agentStore) CheckNameAvailability(ctx context.Context, name string) (available bool, hasKeeper bool, err error) {
 	var keeperID *uuid.UUID
 	err = s.pool.QueryRow(ctx,
@@ -163,7 +244,7 @@ const agentCols = `
 	tessera_json, platform_signature,
 	identity_anchors, capabilities, drift_policy,
 	ard_card_uri, source_platform, attestation,
-	created_at, updated_at`
+	created_at, updated_at, vouch_count`
 
 type scanner interface {
 	Scan(dest ...any) error
@@ -183,7 +264,7 @@ func scanAgent(row scanner, a *domain.Agent) error {
 		&a.TesseraJSON, &platformSig,
 		&a.IdentityAnchors, &a.Capabilities, &a.DriftPolicy,
 		&ardCardURI, &sourcePlatform, &a.Attestation,
-		&a.CreatedAt, &a.UpdatedAt,
+		&a.CreatedAt, &a.UpdatedAt, &a.VouchCount,
 	); err != nil {
 		return err
 	}
@@ -203,6 +284,58 @@ func derefStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// VouchAgentTx atomically increments vouch_count, appends the vouch chain entry,
+// and conditionally upgrades trust_tier to community_attested when the threshold
+// is reached — all in a single database transaction.
+func (s *agentStore) VouchAgentTx(ctx context.Context, agentID uuid.UUID, entry *domain.AttestationEntry, vouchThreshold int) (newCount int, newTier domain.TrustTier, err error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, "", err
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+
+	// Atomically increment vouch_count and conditionally upgrade trust_tier.
+	// The CASE upgrades only from unverified or self_attested to community_attested
+	// once the threshold is met, and never downgrades.
+	err = tx.QueryRow(ctx, `
+		UPDATE tessera.agents
+		SET
+			vouch_count = vouch_count + 1,
+			trust_tier = CASE
+				WHEN vouch_count + 1 >= $2
+				     AND trust_tier IN ('unverified', 'self_attested')
+				THEN 'community_attested'
+				ELSE trust_tier
+			END,
+			updated_at = $3
+		WHERE id = $1
+		RETURNING vouch_count, trust_tier`,
+		agentID, vouchThreshold, now,
+	).Scan(&newCount, &newTier)
+	if err != nil {
+		return 0, "", fmt.Errorf("increment vouch count: %w", err)
+	}
+
+	// Append the vouch chain entry inside the same transaction.
+	if err = tx.QueryRow(ctx, `
+		INSERT INTO tessera.attestation_chain
+			(agent_id, entry_type, attester, payload, signature, expires_at, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		RETURNING id`,
+		entry.AgentID, entry.EntryType, entry.Attester,
+		entry.Payload, entry.Signature, entry.ExpiresAt, entry.CreatedAt,
+	).Scan(&entry.ID); err != nil {
+		return 0, "", fmt.Errorf("append vouch chain entry: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return 0, "", err
+	}
+	return newCount, newTier, nil
 }
 
 func (s *agentStore) queryOne(ctx context.Context, sql string, args ...any) (*domain.Agent, error) {
