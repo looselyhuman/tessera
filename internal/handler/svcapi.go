@@ -169,7 +169,7 @@ func (h *Handler) SvcSetAgentKeeper(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "agent not found")
 		} else {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
@@ -198,7 +198,7 @@ func (h *Handler) SvcSetTrustTier(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "agent not found")
 		} else {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
@@ -345,7 +345,7 @@ func (h *Handler) SvcUpdateKeeperStatement(w http.ResponseWriter, r *http.Reques
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "keeper not found")
 		} else {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
