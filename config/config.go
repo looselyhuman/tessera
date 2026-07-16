@@ -23,9 +23,10 @@ type Config struct {
 	ServiceTokens []string // parsed from TESSERA_SERVICE_TOKENS
 
 	// Rate limits (requests per minute per IP).
-	RateLimitDiscovery int // TESSERA_RATE_LIMIT_DISCOVERY  (default 120 — .well-known reads)
-	RateLimitChallenge int // TESSERA_RATE_LIMIT_CHALLENGE  (default 5  — challenge initiate/verify)
-	RateLimitPublic    int // TESSERA_RATE_LIMIT_PUBLIC     (default 20  — other public endpoints)
+	RateLimitDiscovery      int // TESSERA_RATE_LIMIT_DISCOVERY       (default 120 — .well-known reads)
+	RateLimitChallenge      int // TESSERA_RATE_LIMIT_CHALLENGE       (default 5   — challenge initiate, tight)
+	RateLimitChallengeVerify int // TESSERA_RATE_LIMIT_CHALLENGE_VERIFY (default 10 — verify-challenge polling)
+	RateLimitPublic         int // TESSERA_RATE_LIMIT_PUBLIC          (default 20  — other public endpoints)
 
 	// Platform adapter credentials.
 	CommonsAPIKey    string // TESSERA_COMMONS_API_KEY (optional override; Commons anon key is public)
@@ -58,9 +59,10 @@ func Load() (*Config, error) {
 		}
 	}
 
-	cfg.RateLimitDiscovery = envInt("TESSERA_RATE_LIMIT_DISCOVERY", 120)
-	cfg.RateLimitChallenge = envInt("TESSERA_RATE_LIMIT_CHALLENGE", 5)
-	cfg.RateLimitPublic = envInt("TESSERA_RATE_LIMIT_PUBLIC", 20)
+	cfg.RateLimitDiscovery       = envInt("TESSERA_RATE_LIMIT_DISCOVERY", 120)
+	cfg.RateLimitChallenge       = envInt("TESSERA_RATE_LIMIT_CHALLENGE", 5)
+	cfg.RateLimitChallengeVerify = envInt("TESSERA_RATE_LIMIT_CHALLENGE_VERIFY", 10)
+	cfg.RateLimitPublic          = envInt("TESSERA_RATE_LIMIT_PUBLIC", 20)
 
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("TESSERA_DATABASE_URL is required")

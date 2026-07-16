@@ -53,11 +53,12 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.Handle("GET /api/tessera/check/agent",
 		wrap(publicMW(http.HandlerFunc(h.CheckAgentName))))
 
-	// Challenge-post flow — tight rate limit; public for standard self-registration.
+	// Challenge-post flow — separate limits: 5/min initiate (tight), 10/min verify (polling).
+	verifyMW := h.challengeVerifyLimiter.Middleware
 	mux.Handle("POST /api/tessera/register/challenge",
 		wrap(challengeMW(http.HandlerFunc(h.InitiateChallenge))))
 	mux.Handle("POST /api/tessera/register/verify-challenge",
-		wrap(challengeMW(http.HandlerFunc(h.VerifyChallenge))))
+		wrap(verifyMW(http.HandlerFunc(h.VerifyChallenge))))
 
 	// Agent management
 	mux.Handle("GET /api/tessera/agents/{name}",

@@ -16,9 +16,10 @@ type HandlerConfig struct {
 	ServiceTokens []string
 
 	// Rate limiters — callers create these with ratelimit.New(rpm).
-	DiscoveryLimiter *ratelimit.Limiter // .well-known endpoints (generous)
-	ChallengeLimiter *ratelimit.Limiter // challenge initiate/verify (tight)
-	PublicLimiter    *ratelimit.Limiter // other public endpoints
+	DiscoveryLimiter      *ratelimit.Limiter // .well-known endpoints (generous)
+	ChallengeLimiter      *ratelimit.Limiter // challenge initiate (5/min — tight)
+	ChallengeVerifyLimiter *ratelimit.Limiter // challenge verify polling (10/min — matches Python)
+	PublicLimiter         *ratelimit.Limiter // other public endpoints
 }
 
 // Handler holds the service dependencies for HTTP handlers.
@@ -27,9 +28,10 @@ type Handler struct {
 	adminKey      string
 	serviceTokens []string
 
-	discoveryLimiter *ratelimit.Limiter
-	challengeLimiter *ratelimit.Limiter
-	publicLimiter    *ratelimit.Limiter
+	discoveryLimiter       *ratelimit.Limiter
+	challengeLimiter       *ratelimit.Limiter
+	challengeVerifyLimiter *ratelimit.Limiter
+	publicLimiter          *ratelimit.Limiter
 }
 
 // New creates a Handler wired to the given service.
@@ -37,12 +39,13 @@ type Handler struct {
 // an empty string disables all admin endpoints.
 func New(cfg HandlerConfig) *Handler {
 	return &Handler{
-		svc:              cfg.Svc,
-		adminKey:         cfg.AdminKey,
-		serviceTokens:    cfg.ServiceTokens,
-		discoveryLimiter: cfg.DiscoveryLimiter,
-		challengeLimiter: cfg.ChallengeLimiter,
-		publicLimiter:    cfg.PublicLimiter,
+		svc:                    cfg.Svc,
+		adminKey:               cfg.AdminKey,
+		serviceTokens:          cfg.ServiceTokens,
+		discoveryLimiter:       cfg.DiscoveryLimiter,
+		challengeLimiter:       cfg.ChallengeLimiter,
+		challengeVerifyLimiter: cfg.ChallengeVerifyLimiter,
+		publicLimiter:          cfg.PublicLimiter,
 	}
 }
 

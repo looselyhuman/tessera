@@ -86,9 +86,10 @@ func main() {
 		Svc:              svc,
 		AdminKey:         cfg.AdminKey,
 		ServiceTokens:    cfg.ServiceTokens,
-		DiscoveryLimiter: ratelimit.New(cfg.RateLimitDiscovery),
-		ChallengeLimiter: ratelimit.New(cfg.RateLimitChallenge),
-		PublicLimiter:    ratelimit.New(cfg.RateLimitPublic),
+		DiscoveryLimiter:       ratelimit.New(cfg.RateLimitDiscovery),
+		ChallengeLimiter:       ratelimit.New(cfg.RateLimitChallenge),
+		ChallengeVerifyLimiter: ratelimit.New(cfg.RateLimitChallengeVerify),
+		PublicLimiter:          ratelimit.New(cfg.RateLimitPublic),
 	})
 	handler.Register(mux, h)
 

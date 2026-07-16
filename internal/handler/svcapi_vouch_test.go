@@ -20,9 +20,10 @@ func TestSvcVouchRouteRegistered(t *testing.T) {
 		}
 	}()
 	Register(http.NewServeMux(), &Handler{
-		discoveryLimiter: ratelimit.New(100),
-		challengeLimiter: ratelimit.New(10),
-		publicLimiter:    ratelimit.New(100),
+		discoveryLimiter:       ratelimit.New(100),
+		challengeLimiter:       ratelimit.New(10),
+		challengeVerifyLimiter: ratelimit.New(10),
+		publicLimiter:          ratelimit.New(100),
 	})
 }
 
@@ -31,10 +32,11 @@ func TestSvcVouchRouteRegistered(t *testing.T) {
 func TestSvcVouchHandlerRejectsMissingServiceToken(t *testing.T) {
 	mux := http.NewServeMux()
 	h := &Handler{
-		serviceTokens:    []string{"test-svc-token"},
-		discoveryLimiter: ratelimit.New(100),
-		challengeLimiter: ratelimit.New(10),
-		publicLimiter:    ratelimit.New(100),
+		serviceTokens:          []string{"test-svc-token"},
+		discoveryLimiter:       ratelimit.New(100),
+		challengeLimiter:       ratelimit.New(10),
+		challengeVerifyLimiter: ratelimit.New(10),
+		publicLimiter:          ratelimit.New(100),
 	}
 	Register(mux, h)
 
@@ -57,10 +59,11 @@ func TestSvcVouchHandlerRejectsMissingServiceToken(t *testing.T) {
 func TestSvcVouchHandlerRejectsMissingVoucher(t *testing.T) {
 	mux := http.NewServeMux()
 	h := &Handler{
-		serviceTokens:    []string{"test-svc-token"},
-		discoveryLimiter: ratelimit.New(100),
-		challengeLimiter: ratelimit.New(10),
-		publicLimiter:    ratelimit.New(100),
+		serviceTokens:          []string{"test-svc-token"},
+		discoveryLimiter:       ratelimit.New(100),
+		challengeLimiter:       ratelimit.New(10),
+		challengeVerifyLimiter: ratelimit.New(10),
+		publicLimiter:          ratelimit.New(100),
 		// svc is nil — the handler will panic or fail at the service call if it gets there.
 		// We expect it to fail with 400 before reaching the service because svc is nil
 		// and the voucher check is in the service... but actually we expect a 500 panic.
