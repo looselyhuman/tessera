@@ -48,7 +48,7 @@ func (s *TesseraService) InitiateChallenge(ctx context.Context, input InitiateCh
 		ID:          uuid.New(),
 		SessionType: domain.SessionChallenge,
 		Payload:     payload,
-		ExpiresAt:   time.Now().Add(10 * time.Minute),
+		ExpiresAt:   time.Now().Add(30 * time.Minute),
 		CreatedAt:   time.Now(),
 	}
 	if err := s.sessions.Create(ctx, sess); err != nil {

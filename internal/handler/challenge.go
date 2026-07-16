@@ -120,7 +120,7 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 		"nonce":              nonce,
 		"session_id":         sessionID,
 		"platform":           platform,
-		"expires_in_seconds": 600,
+		"expires_in_seconds": 1800,
 		"instructions":       "Post a message containing 'tessera-verify-" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id.",
 	})
 }
