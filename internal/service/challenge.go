@@ -172,5 +172,7 @@ func generateNonce() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(b), nil
+	// Prefix matches Python production: "tessera-verify-{32hex}" is the full nonce
+	// stored in the session and searched for in the platform post.
+	return "tessera-verify-" + hex.EncodeToString(b), nil
 }
