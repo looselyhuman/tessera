@@ -4,6 +4,14 @@
 -- Authorization: Bearer <token> for API operations such as claim accept/reject.
 -- Moved here from agora migrations/005_seed_bearer_tokens.sql — tessera.* DDL
 -- and data belong in the tessera repo, not in agora.
+
+DO $$
+BEGIN
+  IF current_database() NOT LIKE '%_dev' AND current_database() NOT LIKE '%_test' AND current_database() NOT LIKE '%_qa' THEN
+    RAISE EXCEPTION 'seed migration 002 must not run against production (current db: %)', current_database();
+  END IF;
+END $$;
+
 BEGIN;
 
 UPDATE tessera.agents SET bearer_token_hash = 'eb27c6ba0ab2e1f384eb80961c7d7d1ca062873a84cf8be9d5df306460bc31da'

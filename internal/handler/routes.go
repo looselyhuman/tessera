@@ -63,29 +63,29 @@ func Register(mux *http.ServeMux, h *Handler) {
 	mux.Handle("GET /api/tessera/agents/{name}",
 		wrap(publicMW(http.HandlerFunc(h.GetAgent))))
 	mux.Handle("PUT /api/tessera/agents/{name}",
-		wrap(wrap(http.HandlerFunc(h.UpdateAgent))))
+		wrap(publicMW(http.HandlerFunc(h.UpdateAgent))))
 	mux.Handle("POST /api/tessera/agents/{name}/self-modify",
-		wrap(http.HandlerFunc(h.SelfModify)))
+		wrap(publicMW(http.HandlerFunc(h.SelfModify))))
 	mux.Handle("POST /api/tessera/agents/{name}/transition",
-		wrap(http.HandlerFunc(h.SubstrateTransition)))
+		wrap(publicMW(http.HandlerFunc(h.SubstrateTransition))))
 
 	// Claim flow
 	mux.Handle("POST /api/tessera/agents/{name}/claim",
-		wrap(http.HandlerFunc(h.InitiateClaim)))
+		wrap(publicMW(http.HandlerFunc(h.InitiateClaim))))
 	mux.Handle("POST /api/tessera/agents/{name}/claim/resolve",
-		wrap(http.HandlerFunc(h.ResolveClaim)))
+		wrap(publicMW(http.HandlerFunc(h.ResolveClaim))))
 	mux.Handle("POST /api/tessera/agents/{name}/revoke-keeper",
-		wrap(http.HandlerFunc(h.RevokeKeeper)))
+		wrap(publicMW(http.HandlerFunc(h.RevokeKeeper))))
 	mux.Handle("GET /api/tessera/claims/sent",
 		wrap(http.HandlerFunc(h.ClaimsSent)))
 
 	// Self-service /me endpoints (bearer token auth)
-	mux.Handle("GET /api/tessera/me", wrap(RequireBearer(http.HandlerFunc(h.MeGet))))
-	mux.Handle("PUT /api/tessera/me", wrap(RequireBearer(http.HandlerFunc(h.MeUpdate))))
-	mux.Handle("POST /api/tessera/me/transition", wrap(RequireBearer(http.HandlerFunc(h.MeTransition))))
-	mux.Handle("GET /api/tessera/me/chain", wrap(RequireBearer(http.HandlerFunc(h.MeChain))))
-	mux.Handle("POST /api/tessera/me/request-countersign", wrap(RequireBearer(http.HandlerFunc(h.MeRequestCounterSign))))
-	mux.Handle("POST /api/tessera/me/revoke-keeper", wrap(RequireBearer(http.HandlerFunc(h.MeRevokeKeeper))))
+	mux.Handle("GET /api/tessera/me", wrap(publicMW(RequireBearer(http.HandlerFunc(h.MeGet)))))
+	mux.Handle("PUT /api/tessera/me", wrap(publicMW(RequireBearer(http.HandlerFunc(h.MeUpdate)))))
+	mux.Handle("POST /api/tessera/me/transition", wrap(publicMW(RequireBearer(http.HandlerFunc(h.MeTransition)))))
+	mux.Handle("GET /api/tessera/me/chain", wrap(publicMW(RequireBearer(http.HandlerFunc(h.MeChain)))))
+	mux.Handle("POST /api/tessera/me/request-countersign", wrap(publicMW(RequireBearer(http.HandlerFunc(h.MeRequestCounterSign)))))
+	mux.Handle("POST /api/tessera/me/revoke-keeper", wrap(publicMW(RequireBearer(http.HandlerFunc(h.MeRevokeKeeper)))))
 
 	// Admin endpoints
 	mux.Handle("GET /api/tessera/agents/{name}/verify",

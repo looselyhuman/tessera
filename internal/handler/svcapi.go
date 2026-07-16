@@ -144,7 +144,7 @@ func (h *Handler) SvcPatchAgent(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "agent not found")
 		} else {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}

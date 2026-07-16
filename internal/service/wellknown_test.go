@@ -182,6 +182,14 @@ func (f *fakeChainStore) Append(_ context.Context, e *domain.AttestationEntry) e
 	f.entries = append(f.entries, *e)
 	return nil
 }
+func (f *fakeChainStore) HasVouchEntry(_ context.Context, agentID uuid.UUID, attester string) (bool, error) {
+	for _, e := range f.entries {
+		if e.AgentID == agentID && e.Attester == attester && e.EntryType == "vouch_received" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 func (f *fakeChainStore) GetByAgent(_ context.Context, agentID uuid.UUID) ([]domain.AttestationEntry, error) {
 	var out []domain.AttestationEntry
 	for _, e := range f.entries {

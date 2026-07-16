@@ -25,6 +25,19 @@ func (s *attestationStore) Append(ctx context.Context, e *domain.AttestationEntr
 	).Scan(&e.ID)
 }
 
+func (s *attestationStore) HasVouchEntry(ctx context.Context, agentID uuid.UUID, attester string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM tessera.attestation_chain
+			WHERE agent_id = $1
+			  AND entry_type = 'vouch_received'
+			  AND attester   = $2
+		)`, agentID, attester,
+	).Scan(&exists)
+	return exists, err
+}
+
 func (s *attestationStore) GetByAgent(ctx context.Context, agentID uuid.UUID) ([]domain.AttestationEntry, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, agent_id, entry_type, attester, payload, signature, expires_at, created_at

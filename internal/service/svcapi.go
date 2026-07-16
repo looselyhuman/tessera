@@ -430,6 +430,15 @@ func (s *TesseraService) SvcVouchAgent(ctx context.Context, agentName string, in
 		return nil, err
 	}
 
+	// Reject duplicate vouches from the same attester.
+	hasVouch, err := s.chain.HasVouchEntry(ctx, agent.ID, input.Voucher)
+	if err != nil {
+		return nil, fmt.Errorf("check vouch: %w", err)
+	}
+	if hasVouch {
+		return nil, fmt.Errorf("already vouched")
+	}
+
 	prevTier := agent.TrustTier
 	now := time.Now()
 

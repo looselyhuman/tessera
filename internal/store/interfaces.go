@@ -70,6 +70,10 @@ type KeyStore interface {
 type AttestationStore interface {
 	Append(ctx context.Context, entry *domain.AttestationEntry) error
 	GetByAgent(ctx context.Context, agentID uuid.UUID) ([]domain.AttestationEntry, error)
+	// HasVouchEntry returns true if the attestation chain already contains a
+	// vouch_received entry for the given agent from the given attester.
+	// Used to prevent duplicate vouches from the same source.
+	HasVouchEntry(ctx context.Context, agentID uuid.UUID, attester string) (bool, error)
 }
 
 // ClaimStore manages keeper claim requests.
