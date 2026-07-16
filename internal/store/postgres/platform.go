@@ -266,6 +266,19 @@ func (s *regSessionStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+// Consume deletes the session iff it still exists; a concurrent consumer's
+// delete makes this return domain.ErrNotFound, so exactly one caller wins.
+func (s *regSessionStore) Consume(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM tessera.registration_sessions WHERE id=$1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (s *regSessionStore) PruneExpired(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM tessera.registration_sessions WHERE expires_at < NOW()`)
 	return err

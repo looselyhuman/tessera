@@ -125,6 +125,9 @@ type RegistrationSessionStore interface {
 	Create(ctx context.Context, s *domain.RegistrationSession) error
 	Get(ctx context.Context, id uuid.UUID) (*domain.RegistrationSession, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	// Consume atomically deletes the session, returning domain.ErrNotFound if it
+	// was already gone — the single-winner guard for challenge verification.
+	Consume(ctx context.Context, id uuid.UUID) error
 	// PruneExpired removes sessions where expires_at < now.
 	PruneExpired(ctx context.Context) error
 }

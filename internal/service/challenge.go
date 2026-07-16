@@ -126,15 +126,18 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 		}
 	}
 
-	// C2: consume the session before the external platform fetch to close the replay race window.
-	if err := s.sessions.Delete(ctx, sess.ID); err != nil {
-		return nil, "", fmt.Errorf("consume session: %w", err)
-	}
-
 	if bypass {
+		if err := s.consumeSession(ctx, sess.ID); err != nil {
+			return nil, "", err
+		}
 		return s.createChallengeAgent(ctx, agentName, platform, sess)
 	}
 
+	// The session must SURVIVE a nonce-not-found — verify is a polling endpoint
+	// ("try again in a moment", rate limit 10/min) and the agent posts the nonce
+	// after initiating. Single-use is enforced at the success boundary instead:
+	// Consume() atomically deletes the session, so of two concurrent verifies
+	// that both find the nonce, exactly one creates the agent (C2 replay guard).
 	nonce, _ := payload["nonce"].(string)
 	found, err := adapter.VerifyNonce(ctx, agentName, nonce)
 	if err != nil {
@@ -143,7 +146,22 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	if !found {
 		return nil, "", ErrNonceNotFound
 	}
+	if err := s.consumeSession(ctx, sess.ID); err != nil {
+		return nil, "", err
+	}
 	return s.createChallengeAgent(ctx, agentName, platform, sess)
+}
+
+// consumeSession claims the session for this caller, mapping an already-gone
+// session to ErrNotFound (surfaces as 404 "Session not found or expired").
+func (s *TesseraService) consumeSession(ctx context.Context, id uuid.UUID) error {
+	if err := s.sessions.Consume(ctx, id); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return fmt.Errorf("%w: session already used", domain.ErrNotFound)
+		}
+		return fmt.Errorf("consume session: %w", err)
+	}
+	return nil
 }
 
 func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform string, sess *domain.RegistrationSession) (*domain.Agent, string, error) {

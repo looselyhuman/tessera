@@ -265,8 +265,9 @@ func (f *fakeSessionStore) Create(_ context.Context, _ *domain.RegistrationSessi
 func (f *fakeSessionStore) Get(_ context.Context, _ uuid.UUID) (*domain.RegistrationSession, error) {
 	return nil, domain.ErrNotFound
 }
-func (f *fakeSessionStore) Delete(_ context.Context, _ uuid.UUID) error { return nil }
-func (f *fakeSessionStore) PruneExpired(_ context.Context) error        { return nil }
+func (f *fakeSessionStore) Delete(_ context.Context, _ uuid.UUID) error  { return nil }
+func (f *fakeSessionStore) Consume(_ context.Context, _ uuid.UUID) error { return nil }
+func (f *fakeSessionStore) PruneExpired(_ context.Context) error         { return nil }
 
 // buildTestService wires a TesseraService from fake stores.
 func buildTestService(
