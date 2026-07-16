@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -220,7 +221,14 @@ func (s *TesseraService) VerifyExternal(ctx context.Context, urn string) (*domai
 
 // AdminGeneratePlatformKey generates an Ed25519 keypair for a named platform integration.
 // The private key is stored AES-256-GCM encrypted; only the public key is returned.
+// The canonical name is "platform" — the well-known reader and WellKnownAgent both
+// look up the key under that name. Any other name is accepted but logged as a warning
+// since it will not be found by the standard lookup path.
 func (s *TesseraService) AdminGeneratePlatformKey(ctx context.Context, platformName string) (string, error) {
+	if platformName != "platform" {
+		slog.Warn("platform key generated with non-canonical name — well-known endpoints use 'platform'",
+			"name", platformName)
+	}
 	pubB64, privB64, err := tessera_crypto.GenerateKeypair()
 	if err != nil {
 		return "", fmt.Errorf("generate platform keypair: %w", err)

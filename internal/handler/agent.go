@@ -314,9 +314,10 @@ func (h *Handler) GeneratePlatformKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// Default to "platform" — the canonical name the well-known reader expects.
+	// Non-"platform" names are accepted but produce a service-layer warning.
 	if body.Platform == "" {
-		writeError(w, http.StatusBadRequest, "platform is required")
-		return
+		body.Platform = "platform"
 	}
 	pubKey, err := h.svc.AdminGeneratePlatformKey(r.Context(), body.Platform)
 	if err != nil {
