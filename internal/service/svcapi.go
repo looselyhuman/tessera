@@ -430,13 +430,21 @@ func (s *TesseraService) SvcVouchAgent(ctx context.Context, agentName string, in
 		return nil, err
 	}
 
-	// Reject duplicate vouches from the same attester.
+	// Duplicate vouch from the same attester: return current state instead of
+	// erroring. This makes the endpoint idempotent, so a caller that recorded a
+	// vouch but lost the response (or failed its own follow-up write) can retry
+	// safely — the chain gains no second entry and the count doesn't move.
 	hasVouch, err := s.chain.HasVouchEntry(ctx, agent.ID, input.Voucher)
 	if err != nil {
 		return nil, fmt.Errorf("check vouch: %w", err)
 	}
 	if hasVouch {
-		return nil, fmt.Errorf("already vouched")
+		return &SvcVouchResult{
+			AgentName:    agentName,
+			VouchCount:   agent.VouchCount,
+			TrustTier:    agent.TrustTier,
+			TierUpgraded: false,
+		}, nil
 	}
 
 	prevTier := agent.TrustTier
