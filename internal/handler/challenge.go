@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -111,7 +112,12 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	nonce, sessionID, err := h.svc.InitiateChallenge(r.Context(), input)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, service.ErrUnsupportedPlatform) {
+			writeError(w, http.StatusBadRequest, "unsupported platform — use \"commons\" or \"outpost\"")
+			return
+		}
+		slog.Error("InitiateChallenge", "platform", input.Platform, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	platform := input.Platform
@@ -146,7 +152,12 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "Session not found or expired. Please restart registration.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, service.ErrUnsupportedPlatform) {
+			writeError(w, http.StatusBadRequest, "unsupported platform — use \"commons\" or \"outpost\"")
+			return
+		}
+		slog.Error("VerifyChallenge", "session_id", input.SessionID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{

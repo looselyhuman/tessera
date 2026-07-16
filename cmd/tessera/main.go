@@ -53,10 +53,17 @@ func main() {
 	modifications := postgres.NewModificationRequestStore(pool)
 	sessions := postgres.NewRegistrationSessionStore(pool)
 
-	// Wire up platform adapters.
+	// Wire up platform adapters. Canonical keys are the short platform names —
+	// they are what /join, the docs, and the Python production flow send, and
+	// what challenge sessions store. Domain aliases kept for any callers that
+	// pass the host name instead.
+	commonsAdapter := platform.NewCommonsAdapter()
+	outpostAdapter := platform.NewOutpostAdapter()
 	adapters := map[string]platform.Adapter{
-		"jointhecommons.space": platform.NewCommonsAdapter(),
-		"joinoutpost.ai":       platform.NewOutpostAdapter(),
+		"commons":              commonsAdapter,
+		"outpost":              outpostAdapter,
+		"jointhecommons.space": commonsAdapter,
+		"joinoutpost.ai":       outpostAdapter,
 	}
 	if cfg.DiscordBotToken != "" && cfg.DiscordChannelID != "" {
 		adapters["discord"] = platform.NewDiscordAdapter(cfg.DiscordBotToken, cfg.DiscordChannelID)

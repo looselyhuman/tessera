@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
+	platformpkg "github.com/looselyhuman/tessera/internal/platform"
 	"github.com/looselyhuman/tessera/internal/domain"
 )
 
@@ -28,11 +29,25 @@ type InitiateChallengeInput struct {
 	Internal  bool   `json:"internal"` // bypass for QA/dev via InternalRegKey
 }
 
+// ErrUnsupportedPlatform is returned when a challenge names a platform with no
+// registered adapter. Mapped to 400 at the handler — it must never consume a
+// session or surface as a 500.
+var ErrUnsupportedPlatform = errors.New("unsupported platform")
+
 // InitiateChallenge generates a nonce and creates a short-lived registration session.
 // The caller is expected to post the nonce on the given platform.
 func (s *TesseraService) InitiateChallenge(ctx context.Context, input InitiateChallengeInput) (nonce string, sessionID uuid.UUID, err error) {
 	if input.Internal && s.internalKey == "" {
 		return "", uuid.Nil, fmt.Errorf("internal bypass is disabled: InternalRegKey not configured")
+	}
+
+	// Default matches the handler's display default; validate before creating a
+	// session so unsupported platforms fail here, not at verify time.
+	if input.Platform == "" {
+		input.Platform = "commons"
+	}
+	if _, ok := s.platformAdapters[input.Platform]; !ok {
+		return "", uuid.Nil, fmt.Errorf("%w: %q", ErrUnsupportedPlatform, input.Platform)
 	}
 
 	nonce, err = generateNonce()
@@ -97,22 +112,30 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	platform, _ := payload["platform"].(string)
 	internal, _ := payload["internal"].(bool)
 
-	// C2: consume the session before any verification to close the replay race window.
+	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
+	bypass := internal && s.internalKey != "" && subtle.ConstantTimeCompare([]byte(input.BypassKey), []byte(s.internalKey)) == 1
+
+	// Resolve the adapter BEFORE consuming the session: an unregistered platform
+	// is a config error, and config errors must not burn the caller's session.
+	var adapter platformpkg.Adapter
+	if !bypass {
+		var ok bool
+		adapter, ok = s.platformAdapters[platform]
+		if !ok {
+			return nil, "", fmt.Errorf("%w: %q", ErrUnsupportedPlatform, platform)
+		}
+	}
+
+	// C2: consume the session before the external platform fetch to close the replay race window.
 	if err := s.sessions.Delete(ctx, sess.ID); err != nil {
 		return nil, "", fmt.Errorf("consume session: %w", err)
 	}
 
-	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
-	if internal && s.internalKey != "" && subtle.ConstantTimeCompare([]byte(input.BypassKey), []byte(s.internalKey)) == 1 {
+	if bypass {
 		return s.createChallengeAgent(ctx, agentName, platform, sess)
 	}
 
 	nonce, _ := payload["nonce"].(string)
-
-	adapter, ok := s.platformAdapters[platform]
-	if !ok {
-		return nil, "", fmt.Errorf("unsupported platform %q", platform)
-	}
 	found, err := adapter.VerifyNonce(ctx, agentName, nonce)
 	if err != nil {
 		return nil, "", fmt.Errorf("platform verification: %w", err)

@@ -291,12 +291,15 @@ func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, 
 		return nil, fmt.Errorf("sign agent record: %w", err)
 	}
 
-	// Append the initial chain entry with the keeper's signature.
+	// Append the initial chain entry with the keeper's signature. The payload
+	// must be exactly the canonical bytes the signature was computed over —
+	// VerifyChainIntegrity re-canonicalizes the stored payload and checks the
+	// signature against it (canonicalization is idempotent, so this round-trips).
 	entry := &domain.AttestationEntry{
 		AgentID:   agent.ID,
 		EntryType: domain.EntryCreated,
 		Attester:  "keeper:" + keeperID.String(),
-		Payload:   json.RawMessage(`{"via":"keeper_registration"}`),
+		Payload:   json.RawMessage(canonical),
 		Signature: signature,
 		CreatedAt: now,
 	}
