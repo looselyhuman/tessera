@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
@@ -252,6 +253,9 @@ func (s *regSessionStore) Get(ctx context.Context, id uuid.UUID) (*domain.Regist
 		FROM tessera.registration_sessions WHERE id=$1`, id,
 	).Scan(&sess.ID, &sess.SessionType, &sess.Payload, &sess.ExpiresAt, &sess.CreatedAt)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 	return &sess, nil

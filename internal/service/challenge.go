@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -69,10 +70,14 @@ type VerifyChallengeInput struct {
 func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChallengeInput) (*domain.Agent, string, error) {
 	sess, err := s.sessions.Get(ctx, input.SessionID)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, "", fmt.Errorf("%w: session not found or expired", domain.ErrNotFound)
+		}
 		return nil, "", fmt.Errorf("get session: %w", err)
 	}
 	if time.Now().After(sess.ExpiresAt) {
-		return nil, "", fmt.Errorf("challenge session expired")
+		_ = s.sessions.Delete(ctx, sess.ID)
+		return nil, "", fmt.Errorf("%w: challenge session expired", domain.ErrNotFound)
 	}
 	if sess.SessionType != domain.SessionChallenge {
 		return nil, "", fmt.Errorf("session is not a challenge session")
