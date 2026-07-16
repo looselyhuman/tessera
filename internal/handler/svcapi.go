@@ -230,12 +230,17 @@ func (h *Handler) SvcVouchAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if input.Voucher == "" {
+		writeError(w, http.StatusBadRequest, "voucher is required")
+		return
+	}
 	result, err := h.svc.SvcVouchAgent(r.Context(), name, input)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "agent not found")
 		} else {
-			writeError(w, http.StatusBadRequest, err.Error())
+			slog.Error("SvcVouchAgent", "agent", name, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}

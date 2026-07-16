@@ -8,7 +8,12 @@ ALTER TABLE tessera.agents
     ADD COLUMN IF NOT EXISTS vouch_count INTEGER NOT NULL DEFAULT 0;
 
 -- Extend the entry_type CHECK constraint to include vouch_received.
--- PostgreSQL requires dropping and recreating the constraint.
+-- PostgreSQL requires dropping and recreating the constraint. Databases seeded
+-- by the pre-T7 agora migration named it valid_entry_type; fresh tessera 001
+-- databases get the autonamed variant — drop both so exactly one (permissive)
+-- constraint remains.
+ALTER TABLE tessera.attestation_chain
+    DROP CONSTRAINT IF EXISTS valid_entry_type;
 ALTER TABLE tessera.attestation_chain
     DROP CONSTRAINT IF EXISTS attestation_chain_entry_type_check;
 
