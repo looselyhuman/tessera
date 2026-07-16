@@ -219,6 +219,29 @@ func (h *Handler) SvcListPlatformRegistrations(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, prs)
 }
 
+// SvcVouchAgent handles POST /svc/v1/agents/{name}/vouch.
+// Body: {"voucher": "<identifier>", "statement": "<optional>"}.
+// Atomically increments vouch_count, appends a vouch_received chain entry, and
+// upgrades trust_tier to community_attested when the threshold (3) is reached.
+func (h *Handler) SvcVouchAgent(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var input service.SvcVouchInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	result, err := h.svc.SvcVouchAgent(r.Context(), name, input)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+		} else {
+			writeError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // ── Keepers ───────────────────────────────────────────────────────────────
 
 func (h *Handler) SvcCreateKeeper(w http.ResponseWriter, r *http.Request) {

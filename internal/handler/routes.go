@@ -139,6 +139,8 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcSetTrustTier))))
 	mux.Handle("GET /svc/v1/agents/{name}/platforms",
 		wrap(svcAuth(http.HandlerFunc(h.SvcListPlatformRegistrations))))
+	mux.Handle("POST /svc/v1/agents/{name}/vouch",
+		wrap(svcAuth(http.HandlerFunc(h.SvcVouchAgent))))
 
 	// Keepers
 	mux.Handle("POST /svc/v1/keepers",

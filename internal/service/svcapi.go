@@ -396,6 +396,68 @@ func (s *TesseraService) SvcResolveToken(ctx context.Context, tokenHash string) 
 	return s.agents.GetByTokenHash(ctx, tokenHash)
 }
 
+// vouchThreshold is the number of vouches required to upgrade a tier to community_attested.
+const vouchThreshold = 3
+
+// SvcVouchInput is the request body for the vouch endpoint.
+type SvcVouchInput struct {
+	Voucher   string `json:"voucher"`            // agent or user identifier vouching
+	Statement string `json:"statement,omitempty"` // optional context for the vouch
+}
+
+// SvcVouchResult is the response body for the vouch endpoint.
+type SvcVouchResult struct {
+	AgentName   string           `json:"agent_name"`
+	VouchCount  int              `json:"vouch_count"`
+	TrustTier   domain.TrustTier `json:"trust_tier"`
+	TierUpgraded bool            `json:"tier_upgraded"`
+}
+
+// SvcVouchAgent records a vouch for the named agent. It atomically:
+//   - appends a vouch_received chain entry,
+//   - increments vouch_count,
+//   - upgrades trust_tier to community_attested if vouchThreshold (3) is reached
+//     and the current tier is unverified or self_attested.
+//
+// This is the single write path Agora's VouchAndMaybeUpgradeTx should collapse to.
+func (s *TesseraService) SvcVouchAgent(ctx context.Context, agentName string, input SvcVouchInput) (*SvcVouchResult, error) {
+	if input.Voucher == "" {
+		return nil, fmt.Errorf("voucher is required")
+	}
+
+	agent, err := s.agents.GetByName(ctx, agentName)
+	if err != nil {
+		return nil, err
+	}
+
+	prevTier := agent.TrustTier
+	now := time.Now()
+
+	payload, _ := json.Marshal(map[string]string{
+		"voucher":   input.Voucher,
+		"statement": input.Statement,
+	})
+	entry := &domain.AttestationEntry{
+		AgentID:   agent.ID,
+		EntryType: domain.EntryVouchReceived,
+		Attester:  input.Voucher,
+		Payload:   payload,
+		CreatedAt: now,
+	}
+
+	newCount, newTier, err := s.agents.VouchAgentTx(ctx, agent.ID, entry, vouchThreshold)
+	if err != nil {
+		return nil, fmt.Errorf("vouch agent: %w", err)
+	}
+
+	return &SvcVouchResult{
+		AgentName:    agentName,
+		VouchCount:   newCount,
+		TrustTier:    newTier,
+		TierUpgraded: newTier != prevTier,
+	}, nil
+}
+
 // SvcHasPendingClaim returns true if there is a pending claim on agentName from the keeper
 // identified by keeper_user_id.
 func (s *TesseraService) SvcHasPendingClaim(ctx context.Context, agentName string, keeperUserID uuid.UUID) (bool, error) {
