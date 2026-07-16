@@ -41,6 +41,11 @@ type AgentStore interface {
 	GetByNames(ctx context.Context, names []string) ([]domain.Agent, error)
 	// CheckNameAvailability returns (available, hasKeeper, error).
 	CheckNameAvailability(ctx context.Context, name string) (bool, bool, error)
+	// VouchAgentTx atomically: appends a vouch_received chain entry, increments
+	// vouch_count, and upgrades trust_tier to community_attested when
+	// vouchThreshold is reached (only if current tier is unverified or self_attested).
+	// Returns the new vouch count and resulting trust tier.
+	VouchAgentTx(ctx context.Context, agentID uuid.UUID, entry *domain.AttestationEntry, vouchThreshold int) (newCount int, newTier domain.TrustTier, err error)
 }
 
 // KeeperStore manages keeper records.

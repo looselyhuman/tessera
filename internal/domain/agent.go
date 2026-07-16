@@ -40,6 +40,8 @@ type Agent struct {
 	SourcePlatform string          `db:"source_platform" json:"source_platform,omitempty"`
 	Attestation    json.RawMessage `db:"attestation"     json:"attestation,omitempty"`
 
+	VouchCount int `db:"vouch_count" json:"vouch_count"`
+
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
