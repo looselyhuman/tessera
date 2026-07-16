@@ -16,6 +16,11 @@ import (
 	"github.com/looselyhuman/tessera/internal/domain"
 )
 
+// ErrNonceNotFound is returned by VerifyChallenge when the platform post containing
+// the nonce has not yet been found. The handler should respond 200 {verified:false}
+// rather than treating this as an application error (mirrors Python's behaviour).
+var ErrNonceNotFound = errors.New("nonce not found")
+
 // InitiateChallengeInput starts a challenge-post flow on an external platform.
 type InitiateChallengeInput struct {
 	Platform  string `json:"platform"`
@@ -113,7 +118,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 		return nil, "", fmt.Errorf("platform verification: %w", err)
 	}
 	if !found {
-		return nil, "", fmt.Errorf("nonce not found on %s — post the nonce and try again", platform)
+		return nil, "", ErrNonceNotFound
 	}
 	return s.createChallengeAgent(ctx, agentName, platform, sess)
 }

@@ -135,6 +135,13 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, token, err := h.svc.VerifyChallenge(r.Context(), input)
 	if err != nil {
+		if errors.Is(err, service.ErrNonceNotFound) {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"verified": false,
+				"message":  "Nonce not found yet. Try again in a moment.",
+			})
+			return
+		}
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "Session not found or expired. Please restart registration.")
 			return
