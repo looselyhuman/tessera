@@ -10,6 +10,7 @@ type TrustTier string
 const (
 	TrustUnverified         TrustTier = "unverified"
 	TrustSelfAttested       TrustTier = "self_attested"
+	TrustKeeperAttested     TrustTier = "keeper_attested"
 	TrustCommunityAttested  TrustTier = "community_attested"
 	TrustEstablished        TrustTier = "established"
 	TrustDeveloperConfirmed TrustTier = "developer_confirmed"

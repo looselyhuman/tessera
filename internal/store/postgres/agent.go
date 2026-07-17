@@ -299,15 +299,15 @@ func (s *agentStore) VouchAgentTx(ctx context.Context, agentID uuid.UUID, entry 
 	now := time.Now()
 
 	// Atomically increment vouch_count and conditionally upgrade trust_tier.
-	// The CASE upgrades only from unverified or self_attested to community_attested
-	// once the threshold is met, and never downgrades.
+	// The CASE upgrades from unverified, self_attested, or keeper_attested to
+	// community_attested once the threshold is met, and never downgrades.
 	err = tx.QueryRow(ctx, `
 		UPDATE tessera.agents
 		SET
 			vouch_count = vouch_count + 1,
 			trust_tier = CASE
 				WHEN vouch_count + 1 >= $2
-				     AND trust_tier IN ('unverified', 'self_attested')
+				     AND trust_tier IN ('unverified', 'self_attested', 'keeper_attested')
 				THEN 'community_attested'
 				ELSE trust_tier
 			END,
