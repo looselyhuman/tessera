@@ -15,6 +15,6 @@ type SubstrateTransition struct {
 	Notes           string     `db:"notes"`
 	SignedBy        *uuid.UUID `db:"signed_by"`
 	LoggedBy        string     `db:"logged_by"` // "keeper" | "agent"
-	KeeperSignature string     `db:"keeper_signature"`
+	KeeperSignature *string    `db:"keeper_signature"`
 	TransitionDate  time.Time  `db:"transition_date"`
 }

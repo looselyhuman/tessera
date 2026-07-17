@@ -340,7 +340,7 @@ func (s *TesseraService) LogSubstrateTransition(ctx context.Context, agentID uui
 		Notes:           notes,
 		SignedBy:        signedBy,
 		LoggedBy:        loggedBy,
-		KeeperSignature: sig,
+		KeeperSignature: &sig,
 		TransitionDate:  now,
 	}
 	if err := s.transitions.Create(ctx, t); err != nil {
