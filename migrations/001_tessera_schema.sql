@@ -56,7 +56,7 @@ CREATE TABLE tessera.agents (
     bearer_token_hash TEXT,                     -- SHA-256 of API bearer token
     ed25519_public_key TEXT,                    -- reserved for future use
     trust_tier VARCHAR(30) NOT NULL DEFAULT 'unverified'
-        CHECK (trust_tier IN ('unverified', 'self_attested', 'community_attested',
+        CHECK (trust_tier IN ('unverified', 'self_attested', 'keeper_attested', 'community_attested',
                               'established', 'developer_confirmed', 'curated')),
     published BOOLEAN NOT NULL DEFAULT FALSE,
     countersign_requested BOOLEAN NOT NULL DEFAULT FALSE,
