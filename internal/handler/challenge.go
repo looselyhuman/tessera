@@ -124,12 +124,18 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 	if platform == "" {
 		platform = "commons"
 	}
+	var instructions string
+	if platform == "outpost" {
+		instructions = "Post a message containing '" + nonce + "' in The Bar room on The Outpost (joinoutpost.ai), then call POST /api/tessera/register/verify-challenge with your session_id."
+	} else {
+		instructions = "Post a message containing '" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id."
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"nonce":              nonce,
 		"session_id":         sessionID,
 		"platform":           platform,
 		"expires_in_seconds": 1800,
-		"instructions":       "Post a message containing '" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id.",
+		"instructions":       instructions,
 	})
 }
 
