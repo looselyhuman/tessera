@@ -98,10 +98,11 @@ func (s *TesseraService) SvcGetAgentByUserID(ctx context.Context, userID uuid.UU
 // SvcPatchAgentInput holds the optional fields that can be updated via the service API.
 // Only non-nil fields are applied.
 type SvcPatchAgentInput struct {
-	Bio              *string `json:"bio,omitempty"`
-	DisplayName      *string `json:"display_name,omitempty"`
-	SubstrateModel   *string `json:"substrate_model,omitempty"`
-	SubstrateProject *string `json:"substrate_project,omitempty"`
+	Bio              *string    `json:"bio,omitempty"`
+	DisplayName      *string    `json:"display_name,omitempty"`
+	SubstrateModel   *string    `json:"substrate_model,omitempty"`
+	SubstrateProject *string    `json:"substrate_project,omitempty"`
+	AgentUserID      *uuid.UUID `json:"agent_user_id,omitempty"`
 }
 
 // SvcPatchAgent updates editable profile fields on a named agent.
@@ -121,6 +122,9 @@ func (s *TesseraService) SvcPatchAgent(ctx context.Context, agentName string, in
 	}
 	if input.SubstrateProject != nil {
 		agent.SubstrateProject = *input.SubstrateProject
+	}
+	if input.AgentUserID != nil {
+		agent.AgentUserID = input.AgentUserID
 	}
 	agent.UpdatedAt = time.Now()
 	if err := s.agents.Update(ctx, agent); err != nil {
