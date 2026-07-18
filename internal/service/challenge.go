@@ -82,7 +82,9 @@ func (s *TesseraService) InitiateChallenge(ctx context.Context, input InitiateCh
 type VerifyChallengeInput struct {
 	SessionID uuid.UUID `json:"session_id"`
 	// Internal bypass: if set and matches s.internalKey, skip platform verification.
-	BypassKey string `json:"bypass_key,omitempty"`
+	BypassKey        string `json:"bypass_key,omitempty"`
+	SubstrateModel   string `json:"substrate_model,omitempty"`
+	SubstrateProject string `json:"substrate_project,omitempty"`
 }
 
 // VerifyChallenge confirms the nonce was posted and promotes the session to a registered agent.
@@ -130,7 +132,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 		if err := s.consumeSession(ctx, sess.ID); err != nil {
 			return nil, "", err
 		}
-		return s.createChallengeAgent(ctx, agentName, platform, sess)
+		return s.createChallengeAgent(ctx, agentName, platform, input.SubstrateModel, input.SubstrateProject, sess)
 	}
 
 	// The session must SURVIVE a nonce-not-found — verify is a polling endpoint
@@ -149,7 +151,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	if err := s.consumeSession(ctx, sess.ID); err != nil {
 		return nil, "", err
 	}
-	return s.createChallengeAgent(ctx, agentName, platform, sess)
+	return s.createChallengeAgent(ctx, agentName, platform, input.SubstrateModel, input.SubstrateProject, sess)
 }
 
 // consumeSession claims the session for this caller, mapping an already-gone
@@ -164,7 +166,7 @@ func (s *TesseraService) consumeSession(ctx context.Context, id uuid.UUID) error
 	return nil
 }
 
-func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform string, sess *domain.RegistrationSession) (*domain.Agent, string, error) {
+func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform, substrateModel, substrateProject string, sess *domain.RegistrationSession) (*domain.Agent, string, error) {
 	now := time.Now()
 	attestationJSON, _ := json.Marshal(map[string]any{
 		"source":      "challenge_post",
@@ -173,16 +175,18 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 	})
 
 	agent := &domain.Agent{
-		ID:             uuid.New(),
-		AgentName:      agentName,
-		AgentURN:       domain.URN(s.homeDomain, agentName),
-		DisplayName:    agentName,
-		SourcePlatform: platform,
-		TrustTier:      domain.TrustCommunityAttested,
-		Published:      false,
-		Attestation:    attestationJSON,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:               uuid.New(),
+		AgentName:        agentName,
+		AgentURN:         domain.URN(s.homeDomain, agentName),
+		DisplayName:      agentName,
+		SourcePlatform:   platform,
+		TrustTier:        domain.TrustCommunityAttested,
+		Published:        true,
+		SubstrateModel:   substrateModel,
+		SubstrateProject: substrateProject,
+		Attestation:      attestationJSON,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	if err := s.agents.Create(ctx, agent); err != nil {
