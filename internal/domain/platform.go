@@ -28,8 +28,8 @@ type Revocation struct {
 	RevokedAt        time.Time        `db:"revoked_at"`
 	Reason           RevocationReason `db:"reason"`
 	RevokedBy        string           `db:"revoked_by"` // "keeper" | "agent" | "admin"
-	SuccessorTessera string           `db:"successor_tessera"`
-	KeeperSignature  string           `db:"keeper_signature"`
+	SuccessorTessera *string          `db:"successor_tessera"`
+	KeeperSignature  *string          `db:"keeper_signature"`
 	IsActive         bool             `db:"is_active"`
 }
 

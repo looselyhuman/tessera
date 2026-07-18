@@ -333,6 +333,10 @@ func (s *TesseraService) CheckAgentName(ctx context.Context, name string) (strin
 // LogSubstrateTransition records a model change in the substrate_transitions table and chain.
 func (s *TesseraService) LogSubstrateTransition(ctx context.Context, agentID uuid.UUID, oldModel, newModel, notes string, loggedBy string, signedBy *uuid.UUID, sig string) error {
 	now := time.Now()
+	var sigPtr *string
+	if sig != "" {
+		sigPtr = &sig
+	}
 	t := &domain.SubstrateTransition{
 		AgentID:         agentID,
 		OldModel:        oldModel,
@@ -340,7 +344,7 @@ func (s *TesseraService) LogSubstrateTransition(ctx context.Context, agentID uui
 		Notes:           notes,
 		SignedBy:        signedBy,
 		LoggedBy:        loggedBy,
-		KeeperSignature: &sig,
+		KeeperSignature: sigPtr,
 		TransitionDate:  now,
 	}
 	if err := s.transitions.Create(ctx, t); err != nil {
@@ -364,6 +368,10 @@ func (s *TesseraService) RevokeAgent(ctx context.Context, agentID uuid.UUID, rea
 		return fmt.Errorf("get agent: %w", err)
 	}
 
+	var sigPtr *string
+	if keeperSig != "" {
+		sigPtr = &keeperSig
+	}
 	rev := &domain.Revocation{
 		ID:              uuid.New(),
 		AgentID:         agentID,
@@ -371,7 +379,7 @@ func (s *TesseraService) RevokeAgent(ctx context.Context, agentID uuid.UUID, rea
 		RevokedAt:       time.Now(),
 		Reason:          reason,
 		RevokedBy:       revokedBy,
-		KeeperSignature: keeperSig,
+		KeeperSignature: sigPtr,
 		IsActive:        true,
 	}
 	return s.revocations.Create(ctx, rev)

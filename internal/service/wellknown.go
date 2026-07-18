@@ -122,13 +122,14 @@ func (s *TesseraService) WellKnownAgent(ctx context.Context, name string) (json.
 			firstFrom = transitions[0].TransitionDate
 		}
 		for i, t := range transitions {
+			from := firstFrom
+			if i > 0 {
+				from = transitions[i-1].TransitionDate
+			}
 			entry := map[string]any{
 				"model": t.OldModel,
-				"from":  firstFrom.UTC().Format(time.RFC3339),
+				"from":  from.UTC().Format(time.RFC3339),
 				"to":    t.TransitionDate.UTC().Format(time.RFC3339),
-			}
-			if i > 0 {
-				entry["from"] = transitions[i-1].TransitionDate.UTC().Format(time.RFC3339)
 			}
 			if t.Notes != "" {
 				entry["transition_note"] = t.Notes
