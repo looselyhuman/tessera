@@ -435,10 +435,6 @@ func (h *Handler) SvcUpdateClaimStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Status != domain.ClaimRejected {
-		writeError(w, http.StatusBadRequest, "claim acceptance requires agent authentication; only 'rejected' is allowed here")
-		return
-	}
 	claim, err := h.svc.SvcUpdateClaimStatus(r.Context(), claimID, body.Status)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
