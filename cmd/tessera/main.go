@@ -41,6 +41,10 @@ func main() {
 		log.Fatalf("TESSERA_KEY_SECRET must decode to exactly 32 bytes (got %d)", len(encryptionKey))
 	}
 
+	if cfg.AdminKey == "" {
+		log.Println("WARN: TESSERA_ADMIN_KEY is not set — admin endpoints are unprotected")
+	}
+
 	// Wire up stores.
 	agents := postgres.NewAgentStore(pool)
 	keepers := postgres.NewKeeperStore(pool)

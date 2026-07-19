@@ -38,6 +38,9 @@ type SvcCreateAgentInput struct {
 // private key), this path is intended for Agora's own registration flow where Agora
 // has already performed its auth checks and needs to materialise the tessera record.
 func (s *TesseraService) SvcCreateAgent(ctx context.Context, input SvcCreateAgentInput) (*domain.Agent, error) {
+	if err := validateName(input.AgentName); err != nil {
+		return nil, fmt.Errorf("agent_name: %w", err)
+	}
 	if input.TrustTier == "" {
 		input.TrustTier = domain.TrustUnverified
 	}
@@ -156,11 +159,31 @@ func (s *TesseraService) SvcSetAgentKeeper(ctx context.Context, agentName string
 	return s.agents.GetByID(ctx, agent.ID)
 }
 
+// trustTierRank maps each tier to a numeric rank for ordering checks.
+var trustTierRank = map[domain.TrustTier]int{
+	domain.TrustUnverified:         0,
+	domain.TrustSelfAttested:       1,
+	domain.TrustKeeperAttested:     2,
+	domain.TrustCommunityAttested:  3,
+	domain.TrustEstablished:        4,
+	domain.TrustDeveloperConfirmed: 5,
+	domain.TrustCurated:            6,
+}
+
 // SvcSetTrustTier sets the trust tier on a named agent and appends an attestation entry.
+// It rejects downgrades — the new tier must be >= the current tier.
 func (s *TesseraService) SvcSetTrustTier(ctx context.Context, agentName string, tier domain.TrustTier, attester string) (*domain.Agent, error) {
 	agent, err := s.agents.GetByName(ctx, agentName)
 	if err != nil {
 		return nil, err
+	}
+	newRank, newOK := trustTierRank[tier]
+	curRank, curOK := trustTierRank[agent.TrustTier]
+	if !newOK {
+		return nil, fmt.Errorf("unknown trust tier %q", tier)
+	}
+	if curOK && newRank < curRank {
+		return nil, fmt.Errorf("trust tier downgrade not allowed: %s -> %s", agent.TrustTier, tier)
 	}
 	if err := s.agents.SetTrustTier(ctx, agent.ID, tier); err != nil {
 		return nil, fmt.Errorf("set trust tier: %w", err)
@@ -216,6 +239,9 @@ type SvcCreateKeeperInput struct {
 // SvcCreateKeeper creates a minimal keeper record (no keypair generation).
 // For full keeper registration with keypair, use RegisterKeeper via the admin API.
 func (s *TesseraService) SvcCreateKeeper(ctx context.Context, input SvcCreateKeeperInput) (*domain.Keeper, error) {
+	if err := validateName(input.KeeperName); err != nil {
+		return nil, fmt.Errorf("keeper_name: %w", err)
+	}
 	available, err := s.keepers.CheckNameAvailability(ctx, input.KeeperName)
 	if err != nil {
 		return nil, fmt.Errorf("check keeper name: %w", err)

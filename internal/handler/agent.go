@@ -269,6 +269,10 @@ func (h *Handler) AppendChainEntry(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "entry_type and attester are required")
 		return
 	}
+	if !validEntryType(body.EntryType) {
+		writeError(w, http.StatusBadRequest, "invalid entry_type")
+		return
+	}
 	if err := h.svc.AppendExternalChainEntry(r.Context(), name, domain.EntryType(body.EntryType), body.Attester, body.Payload); err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "agent not found")
@@ -326,3 +330,14 @@ func (h *Handler) GeneratePlatformKey(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"public_key": pubKey})
 }
+
+var validEntryTypes = map[domain.EntryType]bool{
+	domain.EntryCreated: true, domain.EntryHomePlatform: true, domain.EntryRelational: true,
+	domain.EntrySession: true, domain.EntryKeeperClaimed: true, domain.EntryKeeperClaimAccepted: true,
+	domain.EntryKeeperRevoked: true, domain.EntryPredecessorKeeper: true, domain.EntrySubstrateTransition: true,
+	domain.EntryCounterSigned: true, domain.EntryCitizenshipAccepted: true, domain.EntryAgentSelfModified: true,
+	domain.EntryCommunityVerified: true, domain.EntryVouchReceived: true,
+}
+
+func validEntryType(s string) bool { return validEntryTypes[domain.EntryType(s)] }
+

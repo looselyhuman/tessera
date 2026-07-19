@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,16 @@ import (
 	"github.com/looselyhuman/tessera/internal/platform"
 	"github.com/looselyhuman/tessera/internal/store"
 )
+
+var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,30}$`)
+
+// validateName rejects names that could cause path traversal or routing issues.
+func validateName(name string) error {
+	if !validNameRe.MatchString(name) {
+		return fmt.Errorf("name must match ^[a-zA-Z0-9_-]{1,30}$")
+	}
+	return nil
+}
 
 // TesseraService handles all Tessera identity operations.
 type TesseraService struct {
@@ -95,6 +106,9 @@ type RegisterAgentInput struct {
 // private key AES-256-GCM encrypted), signs the registration record, and returns the
 // session ID that the keeper will use to complete agent registration.
 func (s *TesseraService) RegisterKeeper(ctx context.Context, input RegisterKeeperInput) (uuid.UUID, error) {
+	if err := validateName(input.KeeperName); err != nil {
+		return uuid.Nil, fmt.Errorf("keeper_name: %w", err)
+	}
 	available, err := s.keepers.CheckNameAvailability(ctx, input.KeeperName)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("check keeper name: %w", err)
@@ -221,6 +235,9 @@ func (s *TesseraService) RefreshKeeperSession(ctx context.Context, keeperName st
 // RegisterAgent creates an agent record under a verified keeper, signing the agent
 // registration record with the keeper's Ed25519 private key.
 func (s *TesseraService) RegisterAgent(ctx context.Context, keeperID uuid.UUID, input RegisterAgentInput) (*domain.Agent, error) {
+	if err := validateName(input.AgentName); err != nil {
+		return nil, fmt.Errorf("agent_name: %w", err)
+	}
 	available, hasKeeper, err := s.agents.CheckNameAvailability(ctx, input.AgentName)
 	if err != nil {
 		return nil, fmt.Errorf("check agent name: %w", err)
