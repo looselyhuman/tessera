@@ -38,9 +38,10 @@ type TesseraService struct {
 	modifications   store.ModificationRequestStore
 	sessions        store.RegistrationSessionStore
 	platformAdapters map[string]platform.Adapter
-	homeDomain      string
-	internalKey     string
-	encryptionKey   []byte
+	homeDomain       string
+	internalKey      string
+	encryptionKey    []byte
+	minPlatformPosts int
 }
 
 // ServiceConfig holds all dependencies for TesseraService.
@@ -56,10 +57,11 @@ type ServiceConfig struct {
 	Revocations     store.RevocationStore
 	Modifications   store.ModificationRequestStore
 	Sessions        store.RegistrationSessionStore
-	PlatformAdapters map[string]platform.Adapter
-	HomeDomain      string
-	InternalKey     string
-	EncryptionKey   []byte
+	PlatformAdapters    map[string]platform.Adapter
+	HomeDomain          string
+	InternalKey         string
+	EncryptionKey       []byte
+	MinPlatformPosts    int // minimum posts required before issuing a nonce; 0 = disabled
 }
 
 // NewTesseraService wires up the service from a ServiceConfig.
@@ -79,6 +81,7 @@ func NewTesseraService(cfg ServiceConfig) *TesseraService {
 		homeDomain:       cfg.HomeDomain,
 		internalKey:      cfg.InternalKey,
 		encryptionKey:    cfg.EncryptionKey,
+		minPlatformPosts: cfg.MinPlatformPosts,
 	}
 }
 

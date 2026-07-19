@@ -50,6 +50,13 @@ func (s *TesseraService) InitiateChallenge(ctx context.Context, input InitiateCh
 		return "", uuid.Nil, fmt.Errorf("%w: %q", ErrUnsupportedPlatform, input.Platform)
 	}
 
+	// TODO: add CheckActivity(ctx, agentName) (int, error) to the platform.Adapter
+	// interface and replace the stub below with a real call per adapter.
+	// MinPlatformPosts defaults to 0 (disabled); set > 0 only after CheckActivity is implemented.
+	if s.minPlatformPosts > 0 {
+		return "", uuid.Nil, fmt.Errorf("insufficient platform activity (minimum %d posts required)", s.minPlatformPosts)
+	}
+
 	nonce, err = generateNonce()
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate nonce: %w", err)
