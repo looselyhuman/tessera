@@ -50,6 +50,10 @@ func (h *Handler) MeUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	if len(body.SubstrateModel) > 100 || len(body.SubstrateProject) > 100 || len(body.Bio) > 2000 || len(body.DisplayName) > 100 {
+		writeError(w, http.StatusBadRequest, "field exceeds maximum length")
+		return
+	}
 
 	updated, err := h.svc.UpdateAgentProfileFull(r.Context(), agent.ID, body.Bio, body.DisplayName, body.SubstrateModel, body.SubstrateProject)
 	if err != nil {
