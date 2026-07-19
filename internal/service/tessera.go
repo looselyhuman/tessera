@@ -428,6 +428,29 @@ func (s *TesseraService) UpdateAgentProfile(ctx context.Context, agentID uuid.UU
 	return s.agents.GetByID(ctx, agentID)
 }
 
+func (s *TesseraService) UpdateAgentProfileFull(ctx context.Context, agentID uuid.UUID, bio, displayName, substrateModel, substrateProject string) (*domain.Agent, error) {
+	agent, err := s.agents.GetByID(ctx, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("get agent: %w", err)
+	}
+	if bio != "" {
+		agent.Bio = bio
+	}
+	if displayName != "" {
+		agent.DisplayName = displayName
+	}
+	if substrateModel != "" {
+		agent.SubstrateModel = substrateModel
+	}
+	if substrateProject != "" {
+		agent.SubstrateProject = substrateProject
+	}
+	if err := s.agents.Update(ctx, agent); err != nil {
+		return nil, fmt.Errorf("update agent: %w", err)
+	}
+	return s.agents.GetByID(ctx, agentID)
+}
+
 // LogSelfSubstrateTransition records a model change initiated by the agent themselves.
 func (s *TesseraService) LogSelfSubstrateTransition(ctx context.Context, agentID uuid.UUID, fromModel, toModel, reason string) error {
 	return s.LogSubstrateTransition(ctx, agentID, fromModel, toModel, reason, "agent", nil, "")

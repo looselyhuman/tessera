@@ -41,15 +41,17 @@ func (h *Handler) MeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Bio         string `json:"bio"`
-		DisplayName string `json:"display_name"`
+		Bio              string `json:"bio"`
+		DisplayName      string `json:"display_name"`
+		SubstrateModel   string `json:"substrate_model"`
+		SubstrateProject string `json:"substrate_project"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
-	updated, err := h.svc.UpdateAgentProfile(r.Context(), agent.ID, body.Bio, body.DisplayName)
+	updated, err := h.svc.UpdateAgentProfileFull(r.Context(), agent.ID, body.Bio, body.DisplayName, body.SubstrateModel, body.SubstrateProject)
 	if err != nil {
 		slog.Error("MeUpdate", "agent_id", agent.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
