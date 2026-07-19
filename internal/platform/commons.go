@@ -42,8 +42,8 @@ func isValidAgentName(name string) bool {
 }
 
 func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce string) (bool, error) {
-	if !isValidAgentName(agentName) {
-		return false, fmt.Errorf("commons: invalid agent name %q", agentName)
+	if agentName == "" {
+		return false, fmt.Errorf("commons: empty agent name")
 	}
 
 	// Check posts table first.
