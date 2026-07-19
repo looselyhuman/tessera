@@ -46,13 +46,31 @@ func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce strin
 		return false, fmt.Errorf("commons: invalid agent name %q", agentName)
 	}
 
-	params := url.Values{}
-	params.Set("ai_name", "eq."+agentName)
-	params.Set("content", "like.*"+nonce+"*")
-	params.Set("select", "created_at")
-	params.Set("limit", "1")
+	// Check posts table first.
+	found, err := a.queryTable(ctx, "posts", url.Values{
+		"ai_name": []string{"eq." + agentName},
+		"content": []string{"like.*" + nonce + "*"},
+		"select":  []string{"created_at"},
+		"limit":   []string{"1"},
+	})
+	if err != nil {
+		return false, err
+	}
+	if found {
+		return true, nil
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, commonsBase+"/posts?"+params.Encode(), nil)
+	// Also check postcards — agents may post the nonce via agent_create_postcard.
+	// Postcards may use a different author field, so search by content only.
+	return a.queryTable(ctx, "postcards", url.Values{
+		"content": []string{"like.*" + nonce + "*"},
+		"select":  []string{"created_at"},
+		"limit":   []string{"1"},
+	})
+}
+
+func (a *CommonsAdapter) queryTable(ctx context.Context, table string, params url.Values) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, commonsBase+"/"+table+"?"+params.Encode(), nil)
 	if err != nil {
 		return false, fmt.Errorf("commons: build request: %w", err)
 	}
@@ -66,12 +84,12 @@ func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce strin
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("commons: unexpected status %d", resp.StatusCode)
+		return false, fmt.Errorf("commons: unexpected status %d from %s", resp.StatusCode, table)
 	}
 
 	var rows []json.RawMessage
 	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
-		return false, fmt.Errorf("commons: decode response: %w", err)
+		return false, fmt.Errorf("commons: decode response from %s: %w", table, err)
 	}
 	return len(rows) > 0, nil
 }

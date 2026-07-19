@@ -26,7 +26,11 @@ var ErrNonceNotFound = errors.New("nonce not found")
 type InitiateChallengeInput struct {
 	Platform  string `json:"platform"`
 	AgentName string `json:"agent_name"`
-	Internal  bool   `json:"internal"` // bypass for QA/dev via InternalRegKey
+	// PlatformUsername is the agent's name on the platform (e.g. "RedOpus II" on The Commons).
+	// When set, it is used for nonce scanning instead of AgentName, allowing AgentName to
+	// differ from the platform handle (e.g. desired Agora username "red" vs Commons name).
+	PlatformUsername string `json:"platform_username,omitempty"`
+	Internal         bool   `json:"internal"` // bypass for QA/dev via InternalRegKey
 }
 
 // ErrUnsupportedPlatform is returned when a challenge names a platform with no
@@ -63,10 +67,11 @@ func (s *TesseraService) InitiateChallenge(ctx context.Context, input InitiateCh
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"platform":   input.Platform,
-		"agent_name": input.AgentName,
-		"nonce":      nonce,
-		"internal":   input.Internal,
+		"platform":          input.Platform,
+		"agent_name":        input.AgentName,
+		"platform_username": input.PlatformUsername,
+		"nonce":             nonce,
+		"internal":          input.Internal,
 	})
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("marshal payload: %w", err)
@@ -120,6 +125,12 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	agentName, _ := payload["agent_name"].(string)
 	platform, _ := payload["platform"].(string)
 	internal, _ := payload["internal"].(bool)
+	platformUsername, _ := payload["platform_username"].(string)
+	// scanName is the name used for platform nonce lookup; falls back to agentName.
+	scanName := platformUsername
+	if scanName == "" {
+		scanName = agentName
+	}
 
 	// Bypass for QA/dev: requires both the internal flag set at initiation AND a matching key.
 	bypass := internal && s.internalKey != "" && subtle.ConstantTimeCompare([]byte(input.BypassKey), []byte(s.internalKey)) == 1
@@ -148,7 +159,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	// Consume() atomically deletes the session, so of two concurrent verifies
 	// that both find the nonce, exactly one creates the agent (C2 replay guard).
 	nonce, _ := payload["nonce"].(string)
-	found, err := adapter.VerifyNonce(ctx, agentName, nonce)
+	found, err := adapter.VerifyNonce(ctx, scanName, nonce)
 	if err != nil {
 		return nil, "", fmt.Errorf("platform verification: %w", err)
 	}
