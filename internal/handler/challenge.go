@@ -165,6 +165,10 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "unsupported platform — use \"commons\" or \"outpost\"")
 			return
 		}
+		if errors.Is(err, service.ErrAgentAlreadyRegistered) {
+			writeError(w, http.StatusConflict, "agent already registered and linked — no action needed")
+			return
+		}
 		slog.Error("VerifyChallenge", "session_id", input.SessionID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return

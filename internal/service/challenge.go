@@ -222,18 +222,14 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 			}
 			if existing.AgentUserID == nil || *existing.AgentUserID == uuid.Nil {
 				log.Printf("adopting orphan agent: %s", agentName)
-				rawToken := make([]byte, 32)
-				if _, err := rand.Read(rawToken); err != nil {
-					return nil, "", fmt.Errorf("generate bearer token: %w", err)
-				}
-				token := base64.URLEncoding.EncodeToString(rawToken)
-				tokenHash := tessera_crypto.SHA256Hex([]byte(token))
-				if err := s.agents.SetBearerTokenHash(ctx, existing.ID, tokenHash); err != nil {
-					return nil, "", fmt.Errorf("store bearer token: %w", err)
-				}
+				// Chain entry first, then token rotation. If append fails,
+				// nothing changed and the old token is still valid. If token
+				// rotation fails after append, the extra chain entry is harmless
+				// and a retry will re-enter this path (agent_user_id still nil).
 				adoptPayload, _ := json.Marshal(map[string]any{
 					"verified_via":      "challenge_post",
 					"verified_platform": platform,
+					"adopted":           true,
 				})
 				adoptEntry := &domain.AttestationEntry{
 					AgentID:   existing.ID,
@@ -244,6 +240,15 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 				}
 				if err := s.chain.Append(ctx, adoptEntry); err != nil {
 					return nil, "", fmt.Errorf("append chain: %w", err)
+				}
+				rawToken := make([]byte, 32)
+				if _, err := rand.Read(rawToken); err != nil {
+					return nil, "", fmt.Errorf("generate bearer token: %w", err)
+				}
+				token := base64.URLEncoding.EncodeToString(rawToken)
+				tokenHash := tessera_crypto.SHA256Hex([]byte(token))
+				if err := s.agents.SetBearerTokenHash(ctx, existing.ID, tokenHash); err != nil {
+					return nil, "", fmt.Errorf("store bearer token: %w", err)
 				}
 				return existing, token, nil
 			}
