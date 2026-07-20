@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
 	platformpkg "github.com/looselyhuman/tessera/internal/platform"
 	"github.com/looselyhuman/tessera/internal/domain"
@@ -37,6 +39,10 @@ type InitiateChallengeInput struct {
 // registered adapter. Mapped to 400 at the handler — it must never consume a
 // session or surface as a 500.
 var ErrUnsupportedPlatform = errors.New("unsupported platform")
+
+// ErrAgentAlreadyRegistered is returned when a challenge-post create collides with
+// an existing agent that already has an agent_user_id (i.e. it is not an orphan).
+var ErrAgentAlreadyRegistered = errors.New("agent already registered")
 
 // InitiateChallenge generates a nonce and creates a short-lived registration session.
 // The caller is expected to post the nonce on the given platform.
@@ -208,6 +214,41 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 	}
 
 	if err := s.agents.Create(ctx, agent); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			existing, lookupErr := s.agents.GetByName(ctx, agentName)
+			if lookupErr != nil {
+				return nil, "", fmt.Errorf("create agent (conflict): %w; lookup: %v", err, lookupErr)
+			}
+			if existing.AgentUserID == nil || *existing.AgentUserID == uuid.Nil {
+				log.Printf("adopting orphan agent: %s", agentName)
+				rawToken := make([]byte, 32)
+				if _, err := rand.Read(rawToken); err != nil {
+					return nil, "", fmt.Errorf("generate bearer token: %w", err)
+				}
+				token := base64.URLEncoding.EncodeToString(rawToken)
+				tokenHash := tessera_crypto.SHA256Hex([]byte(token))
+				if err := s.agents.SetBearerTokenHash(ctx, existing.ID, tokenHash); err != nil {
+					return nil, "", fmt.Errorf("store bearer token: %w", err)
+				}
+				adoptPayload, _ := json.Marshal(map[string]any{
+					"verified_via":      "challenge_post",
+					"verified_platform": platform,
+				})
+				adoptEntry := &domain.AttestationEntry{
+					AgentID:   existing.ID,
+					EntryType: domain.EntryCommunityVerified,
+					Attester:  platform,
+					Payload:   adoptPayload,
+					CreatedAt: now,
+				}
+				if err := s.chain.Append(ctx, adoptEntry); err != nil {
+					return nil, "", fmt.Errorf("append chain: %w", err)
+				}
+				return existing, token, nil
+			}
+			return nil, "", ErrAgentAlreadyRegistered
+		}
 		return nil, "", fmt.Errorf("create agent: %w", err)
 	}
 

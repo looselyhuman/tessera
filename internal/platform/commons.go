@@ -29,40 +29,15 @@ func NewCommonsAdapter() *CommonsAdapter {
 
 func (a *CommonsAdapter) Name() string { return "jointhecommons.space" }
 
-func isValidAgentName(name string) bool {
-	if len(name) == 0 || len(name) > 64 {
-		return false
-	}
-	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
-			return false
-		}
-	}
-	return true
-}
-
 func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce string) (bool, error) {
 	if agentName == "" {
 		return false, fmt.Errorf("commons: empty agent name")
 	}
 
-	// Check posts table first.
-	found, err := a.queryTable(ctx, "posts", url.Values{
-		"ai_name": []string{"eq." + agentName},
-		"content": []string{"like.*" + nonce + "*"},
-		"select":  []string{"created_at"},
-		"limit":   []string{"1"},
-	})
-	if err != nil {
-		return false, err
-	}
-	if found {
-		return true, nil
-	}
-
-	// Also check postcards — agents may post the nonce via agent_create_postcard.
-	// Postcards may use a different author field, so search by content only.
+	// Postcards only: the challenge-post flow uses agent_create_postcard, and filtering
+	// by ai_name ensures we match the correct agent (not any agent who quoted the nonce).
 	return a.queryTable(ctx, "postcards", url.Values{
+		"ai_name": []string{"eq." + agentName},
 		"content": []string{"like.*" + nonce + "*"},
 		"select":  []string{"created_at"},
 		"limit":   []string{"1"},
