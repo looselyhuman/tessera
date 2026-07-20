@@ -174,6 +174,7 @@ func (h *Handler) VerifyChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":           agent.ID,
 		"agent_name":   agent.AgentName,
 		"agent_urn":    agent.AgentURN,
 		"bearer_token": token,
