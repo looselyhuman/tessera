@@ -168,6 +168,8 @@ func Register(mux *http.ServeMux, h *Handler) {
 		wrap(svcAuth(http.HandlerFunc(h.SvcGetClaimsSentByKeeperUser))))
 	mux.Handle("PUT /svc/v1/claims/{id}/status",
 		wrap(svcAuth(http.HandlerFunc(h.SvcUpdateClaimStatus))))
+	mux.Handle("POST /svc/v1/claims/{id}/accept",
+		wrap(svcAuth(http.HandlerFunc(h.SvcAcceptClaim))))
 	mux.Handle("GET /svc/v1/claims/has-pending",
 		wrap(svcAuth(http.HandlerFunc(h.SvcHasPendingClaim))))
 }

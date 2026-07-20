@@ -443,6 +443,36 @@ func (h *Handler) SvcUpdateClaimStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, claim)
 }
 
+func (h *Handler) SvcAcceptClaim(w http.ResponseWriter, r *http.Request) {
+	raw := r.PathValue("id")
+	claimID, err := uuid.Parse(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid claim id")
+		return
+	}
+	var body struct {
+		AgentToken string `json:"agent_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.AgentToken == "" {
+		writeError(w, http.StatusBadRequest, "agent_token is required")
+		return
+	}
+	claim, err := h.svc.SvcAcceptClaim(r.Context(), claimID, body.AgentToken)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "claim not found")
+		} else {
+			writeError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, claim)
+}
+
 func (h *Handler) SvcResolveToken(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TokenHash string `json:"token_hash"`

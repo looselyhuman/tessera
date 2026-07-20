@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	tessera_crypto "github.com/looselyhuman/tessera/internal/crypto"
 	"github.com/looselyhuman/tessera/internal/domain"
 	"github.com/looselyhuman/tessera/internal/store"
 )
@@ -416,6 +417,53 @@ func (s *TesseraService) SvcUpdateClaimStatus(ctx context.Context, claimID uuid.
 	}
 
 	claim.Status = status
+	claim.ResolvedAt = &now
+	return claim, nil
+}
+
+// SvcAcceptClaim accepts a pending keeper claim on behalf of an agent.
+// It requires both the service token (checked by the HTTP layer) and the agent's
+// raw bearer token, which Tessera hashes and verifies against the claim's target
+// agent. This keeps consent validation in Tessera where it belongs.
+func (s *TesseraService) SvcAcceptClaim(ctx context.Context, claimID uuid.UUID, agentBearerToken string) (*domain.ClaimRequest, error) {
+	claim, err := s.claims.GetByID(ctx, claimID)
+	if err != nil {
+		return nil, fmt.Errorf("claim not found: %w", err)
+	}
+	if claim.Status != domain.ClaimPending {
+		return nil, fmt.Errorf("claim is already resolved")
+	}
+	if claim.AgentID == nil {
+		return nil, fmt.Errorf("claim has no target agent")
+	}
+
+	hash := tessera_crypto.SHA256Hex([]byte(agentBearerToken))
+	agent, err := s.agents.GetByTokenHash(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid agent token")
+	}
+	if agent.ID != *claim.AgentID {
+		return nil, fmt.Errorf("token does not match claim's target agent")
+	}
+
+	now := time.Now()
+	payload, _ := json.Marshal(map[string]string{
+		"claim_id":  claimID.String(),
+		"keeper_id": claim.KeeperID.String(),
+		"via":       "agora_svc_accept",
+	})
+	entry := &domain.AttestationEntry{
+		AgentID:   agent.ID,
+		EntryType: domain.EntryKeeperClaimAccepted,
+		Attester:  "agent:" + agent.ID.String(),
+		Payload:   payload,
+		CreatedAt: now,
+	}
+	if err := s.claims.ResolveClaimTx(ctx, claimID, agent.ID, claim.KeeperID, domain.ClaimAccepted, entry); err != nil {
+		return nil, fmt.Errorf("resolve claim: %w", err)
+	}
+
+	claim.Status = domain.ClaimAccepted
 	claim.ResolvedAt = &now
 	return claim, nil
 }
