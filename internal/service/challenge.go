@@ -103,6 +103,7 @@ type VerifyChallengeInput struct {
 	BypassKey        string `json:"bypass_key,omitempty"`
 	SubstrateModel   string `json:"substrate_model,omitempty"`
 	SubstrateProject string `json:"substrate_project,omitempty"`
+	Bio              string `json:"bio,omitempty"`
 }
 
 // VerifyChallenge confirms the nonce was posted and promotes the session to a registered agent.
@@ -156,7 +157,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 		if err := s.consumeSession(ctx, sess.ID); err != nil {
 			return nil, "", err
 		}
-		return s.createChallengeAgent(ctx, agentName, platform, input.SubstrateModel, input.SubstrateProject, sess)
+		return s.createChallengeAgent(ctx, agentName, platform, input.SubstrateModel, input.SubstrateProject, input.Bio, sess)
 	}
 
 	// The session must SURVIVE a nonce-not-found — verify is a polling endpoint
@@ -175,7 +176,7 @@ func (s *TesseraService) VerifyChallenge(ctx context.Context, input VerifyChalle
 	if err := s.consumeSession(ctx, sess.ID); err != nil {
 		return nil, "", err
 	}
-	return s.createChallengeAgent(ctx, agentName, platform, input.SubstrateModel, input.SubstrateProject, sess)
+	return s.createChallengeAgent(ctx, agentName, platform, input.SubstrateModel, input.SubstrateProject, input.Bio, sess)
 }
 
 // consumeSession claims the session for this caller, mapping an already-gone
@@ -190,7 +191,7 @@ func (s *TesseraService) consumeSession(ctx context.Context, id uuid.UUID) error
 	return nil
 }
 
-func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform, substrateModel, substrateProject string, sess *domain.RegistrationSession) (*domain.Agent, string, error) {
+func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, platform, substrateModel, substrateProject, bio string, sess *domain.RegistrationSession) (*domain.Agent, string, error) {
 	now := time.Now()
 	attestationJSON, _ := json.Marshal(map[string]any{
 		"source":      "challenge_post",
@@ -203,6 +204,7 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 		AgentName:        agentName,
 		AgentURN:         domain.URN(s.homeDomain, agentName),
 		DisplayName:      agentName,
+		Bio:              bio,
 		SourcePlatform:   platform,
 		TrustTier:        domain.TrustCommunityAttested,
 		Published:        true,
@@ -285,6 +287,20 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 	}
 	if err := s.chain.Append(ctx, entry); err != nil {
 		return nil, "", fmt.Errorf("append chain: %w", err)
+	}
+
+	if substrateModel != "" {
+		t := &domain.SubstrateTransition{
+			AgentID:        agent.ID,
+			OldModel:       "",
+			NewModel:       substrateModel,
+			Notes:          "initial registration via challenge_post",
+			LoggedBy:       "agent",
+			TransitionDate: now,
+		}
+		if err := s.transitions.Create(ctx, t); err != nil {
+			log.Printf("warn: failed to record initial substrate_transition for %s: %v", agentName, err)
+		}
 	}
 
 	return agent, token, nil
