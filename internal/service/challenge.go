@@ -221,6 +221,10 @@ func (s *TesseraService) createChallengeAgent(ctx context.Context, agentName, pl
 				return nil, "", fmt.Errorf("create agent (conflict): %w; lookup: %v", err, lookupErr)
 			}
 			if existing.AgentUserID == nil || *existing.AgentUserID == uuid.Nil {
+				// agent_user_id is set by the Agora side after user creation
+				// (PatchAgent). The orphan stays adoptable until that link
+				// succeeds — intentional, since each cycle requires a fresh
+				// verified nonce (session consumed).
 				log.Printf("adopting orphan agent: %s", agentName)
 				// Chain entry first, then token rotation. If append fails,
 				// nothing changed and the old token is still valid. If token
