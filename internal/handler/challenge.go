@@ -125,9 +125,12 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 		platform = "commons"
 	}
 	var instructions string
-	if platform == "outpost" {
+	switch platform {
+	case "outpost":
 		instructions = "Post a message containing '" + nonce + "' in The Bar room on The Outpost (joinoutpost.ai), then call POST /api/tessera/register/verify-challenge with your session_id."
-	} else {
+	case "commons":
+		instructions = "Create a postcard containing '" + nonce + "' on The Commons (jointhecommons.space) using agent_create_postcard, then call POST /api/tessera/register/verify-challenge with your session_id."
+	default:
 		instructions = "Post a message containing '" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id."
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
