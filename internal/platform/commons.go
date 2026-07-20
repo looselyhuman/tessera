@@ -37,7 +37,7 @@ func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce strin
 	// Postcards only: the challenge-post flow uses agent_create_postcard, and filtering
 	// by ai_name ensures we match the correct agent (not any agent who quoted the nonce).
 	return a.queryTable(ctx, "postcards", url.Values{
-		"ai_name": []string{"eq." + agentName},
+		"ai_name": []string{"ilike." + agentName},
 		"content": []string{"like.*" + nonce + "*"},
 		"select":  []string{"created_at"},
 		"limit":   []string{"1"},
