@@ -465,8 +465,11 @@ func (h *Handler) SvcAcceptClaim(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "claim not found")
+		} else if strings.Contains(err.Error(), "consent verification failed") || strings.Contains(err.Error(), "already resolved") {
+			writeError(w, http.StatusForbidden, err.Error())
 		} else {
-			writeError(w, http.StatusBadRequest, err.Error())
+			slog.Error("SvcAcceptClaim", "claim_id", claimID, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}

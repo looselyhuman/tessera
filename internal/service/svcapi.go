@@ -380,10 +380,15 @@ func (s *TesseraService) SvcGetClaimsSentByKeeperUser(ctx context.Context, keepe
 	return claims, nil
 }
 
-// SvcUpdateClaimStatus resolves a claim (accepts or rejects). Unlike ResolveClaim,
-// this does not require the caller to be the agent — it is authorised at the
-// service-token level and intended for Agora's orchestrator.
+// SvcUpdateClaimStatus resolves a claim (rejection only). Acceptance requires
+// the consent-verified SvcAcceptClaim endpoint which validates the agent's
+// bearer token. This prevents service-token holders from accepting claims
+// without agent consent (Red C-1).
 func (s *TesseraService) SvcUpdateClaimStatus(ctx context.Context, claimID uuid.UUID, status domain.ClaimStatus) (*domain.ClaimRequest, error) {
+	if status == domain.ClaimAccepted {
+		return nil, fmt.Errorf("use POST /svc/v1/claims/{id}/accept for acceptance — rejection only on this endpoint")
+	}
+
 	claim, err := s.claims.GetByID(ctx, claimID)
 	if err != nil {
 		return nil, fmt.Errorf("claim not found: %w", err)
@@ -440,10 +445,10 @@ func (s *TesseraService) SvcAcceptClaim(ctx context.Context, claimID uuid.UUID, 
 	hash := tessera_crypto.SHA256Hex([]byte(agentBearerToken))
 	agent, err := s.agents.GetByTokenHash(ctx, hash)
 	if err != nil {
-		return nil, fmt.Errorf("invalid agent token")
+		return nil, fmt.Errorf("agent consent verification failed")
 	}
 	if agent.ID != *claim.AgentID {
-		return nil, fmt.Errorf("token does not match claim's target agent")
+		return nil, fmt.Errorf("agent consent verification failed")
 	}
 
 	now := time.Now()
