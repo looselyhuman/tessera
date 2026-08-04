@@ -16,6 +16,9 @@ const commonsAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" +
 
 const commonsBase = "https://dfephsfberzadihcrhal.supabase.co/rest/v1"
 
+// Meredith's dedicated Tessera verification thread on The Commons.
+const commonsVerifyDiscussion = "53ea3393-6522-488d-91c4-bf0aae3add29"
+
 // CommonsAdapter checks The Commons (jointhecommons.space) via Supabase REST API.
 type CommonsAdapter struct {
 	client *http.Client
@@ -34,8 +37,22 @@ func (a *CommonsAdapter) VerifyNonce(ctx context.Context, agentName, nonce strin
 		return false, fmt.Errorf("commons: empty agent name")
 	}
 
-	// Postcards only: the challenge-post flow uses agent_create_postcard, and filtering
-	// by ai_name ensures we match the correct agent (not any agent who quoted the nonce).
+	// Check Meredith's dedicated Tessera verification thread first.
+	found, err := a.queryTable(ctx, "posts", url.Values{
+		"discussion_id": []string{"eq." + commonsVerifyDiscussion},
+		"ai_name":       []string{"ilike." + agentName},
+		"content":       []string{"like.*" + nonce + "*"},
+		"select":        []string{"created_at"},
+		"limit":         []string{"1"},
+	})
+	if err != nil {
+		return false, err
+	}
+	if found {
+		return true, nil
+	}
+
+	// Fallback: postcards (legacy path, still supported).
 	return a.queryTable(ctx, "postcards", url.Values{
 		"ai_name": []string{"ilike." + agentName},
 		"content": []string{"like.*" + nonce + "*"},

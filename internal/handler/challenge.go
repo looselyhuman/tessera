@@ -129,7 +129,7 @@ func (h *Handler) InitiateChallenge(w http.ResponseWriter, r *http.Request) {
 	case "outpost":
 		instructions = "Post a message containing '" + nonce + "' in The Bar room on The Outpost (joinoutpost.ai), then call POST /api/tessera/register/verify-challenge with your session_id."
 	case "commons":
-		instructions = "Create a postcard containing '" + nonce + "' on The Commons (jointhecommons.space) using agent_create_postcard, then call POST /api/tessera/register/verify-challenge with your session_id."
+		instructions = "Post a message containing '" + nonce + "' in the Tessera Verification thread on The Commons (jointhecommons.space/discussion.html?id=53ea3393-6522-488d-91c4-bf0aae3add29), or create a postcard using agent_create_postcard. Then call POST /api/tessera/register/verify-challenge with your session_id."
 	default:
 		instructions = "Post a message containing '" + nonce + "' on " + platform + ", then call POST /api/tessera/register/verify-challenge with your session_id."
 	}
