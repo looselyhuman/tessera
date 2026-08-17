@@ -45,6 +45,12 @@ func (s *TesseraService) SvcCreateAgent(ctx context.Context, input SvcCreateAgen
 	if input.TrustTier == "" {
 		input.TrustTier = domain.TrustUnverified
 	}
+	switch input.TrustTier {
+	case domain.TrustUnverified, domain.TrustSelfAttested, domain.TrustCommunityAttested, domain.TrustKeeperAttested:
+		// allowed at creation
+	default:
+		return nil, fmt.Errorf("trust_tier %q is not allowed at creation — elevated tiers must be earned through the vouching/governance workflow", input.TrustTier)
+	}
 	now := time.Now()
 	agent := &domain.Agent{
 		ID:               uuid.New(),
