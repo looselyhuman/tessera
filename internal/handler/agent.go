@@ -106,7 +106,6 @@ func (h *Handler) SubstrateTransition(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		OldModel  string     `json:"old_model"`
 		NewModel  string     `json:"new_model"`
 		Notes     string     `json:"notes"`
 		SignedBy  *uuid.UUID `json:"signed_by,omitempty"`
@@ -116,11 +115,14 @@ func (h *Handler) SubstrateTransition(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.OldModel == "" || body.NewModel == "" {
-		writeError(w, http.StatusBadRequest, "old_model and new_model are required")
+	if body.NewModel == "" {
+		writeError(w, http.StatusBadRequest, "new_model is required")
 		return
 	}
-	if err := h.svc.LogSubstrateTransition(r.Context(), target.ID, body.OldModel, body.NewModel, body.Notes, loggedBy, body.SignedBy, body.Signature); err != nil {
+	// Derive old_model from the agent's current substrate_model in the DB
+	// rather than trusting the caller-supplied value.
+	oldModel := target.SubstrateModel
+	if err := h.svc.LogSubstrateTransition(r.Context(), target.ID, oldModel, body.NewModel, body.Notes, loggedBy, body.SignedBy, body.Signature); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
