@@ -456,6 +456,9 @@ func (s *TesseraService) SvcAcceptClaim(ctx context.Context, claimID uuid.UUID, 
 	if agent.ID != *claim.AgentID {
 		return nil, fmt.Errorf("agent consent verification failed")
 	}
+	if agent.KeeperID != nil {
+		return nil, fmt.Errorf("agent already has a keeper — revoke the existing keeper first")
+	}
 
 	now := time.Now()
 	payload, _ := json.Marshal(map[string]string{
