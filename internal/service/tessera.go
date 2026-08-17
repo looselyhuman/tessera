@@ -66,6 +66,9 @@ type ServiceConfig struct {
 
 // NewTesseraService wires up the service from a ServiceConfig.
 func NewTesseraService(cfg ServiceConfig) *TesseraService {
+	if len(cfg.EncryptionKey) > 0 && len(cfg.EncryptionKey) != 32 {
+		panic(fmt.Sprintf("tessera: EncryptionKey must be exactly 32 bytes (AES-256), got %d", len(cfg.EncryptionKey)))
+	}
 	return &TesseraService{
 		agents:           cfg.Agents,
 		keepers:          cfg.Keepers,
